@@ -1,6 +1,5 @@
-export const dynamic = 'force-dynamic';
-
 'use client';
+
 import { Suspense, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
@@ -12,7 +11,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<string>('Loading...');
   const [email, setEmail] = useState<string>('');
   const router = useRouter();
-  const pathname = usePathname(); // The hook is safely inside this child component
+  const pathname = usePathname(); 
 
   useEffect(() => {
     const getUser = async () => {
@@ -79,7 +78,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   );
 }
 
-// 2. The main export only renders the Suspense wrapper
+// 2. The main export ONLY contains the Suspense wrapper
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <Suspense fallback={<div className="flex h-screen items-center justify-center">Loading Dashboard...</div>}>
