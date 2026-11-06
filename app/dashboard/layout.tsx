@@ -6,7 +6,6 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Package, PlusCircle, LogOut, LayoutDashboard } from 'lucide-react';
 
-// 1. All layout logic and hooks go here
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<string>('Loading...');
   const [email, setEmail] = useState<string>('');
@@ -39,7 +38,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* SIDEBAR */}
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
         <div className="p-6 border-b border-gray-200">
           <h1 className="text-xl font-bold text-blue-600">Logistics Portal</h1>
@@ -70,7 +68,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
       <main className="flex-1 overflow-y-auto p-8">
         {children}
       </main>
@@ -78,7 +75,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   );
 }
 
-// 2. The main export ONLY contains the Suspense wrapper
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <Suspense fallback={<div className="flex h-screen items-center justify-center">Loading Dashboard...</div>}>
