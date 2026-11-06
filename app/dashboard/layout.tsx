@@ -1,15 +1,16 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Package, PlusCircle, LogOut, LayoutDashboard } from 'lucide-react';
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+// 1. We extract the actual layout into a child component
+function DashboardContent({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<string>('Loading...');
   const [email, setEmail] = useState<string>('');
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname(); // This is what caused the error
 
   useEffect(() => {
     const getUser = async () => {
@@ -18,7 +19,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         router.push('/login');
       } else {
         setEmail(user.email || '');
-        // Determine role based on email prefix
         const prefix = user.email?.split('@')[0].toLowerCase();
         if (prefix?.includes('admin')) setUserRole('Super Admin');
         else if (prefix?.includes('finance')) setUserRole('Finance');
@@ -74,5 +74,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {children}
       </main>
     </div>
+  );
+}
+
+// 2. We wrap the child component in Suspense and export it
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center">Loading Dashboard...</div>}>
+      <DashboardContent>{children}</DashboardContent>
+    </Suspense>
   );
 }
