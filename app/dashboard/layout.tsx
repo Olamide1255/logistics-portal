@@ -1,4 +1,4 @@
-export const instant = false;
+export const dynamic = 'force-dynamic';
 
 'use client';
 import { Suspense, useEffect, useState } from 'react';
