@@ -1,3 +1,5 @@
+export const instant = false;
+
 'use client';
 import { Suspense, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -5,12 +7,12 @@ import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Package, PlusCircle, LogOut, LayoutDashboard } from 'lucide-react';
 
-// 1. We extract the actual layout into a child component
+// 1. All layout logic and hooks go here
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<string>('Loading...');
   const [email, setEmail] = useState<string>('');
   const router = useRouter();
-  const pathname = usePathname(); // This is what caused the error
+  const pathname = usePathname(); // The hook is safely inside this child component
 
   useEffect(() => {
     const getUser = async () => {
@@ -77,7 +79,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   );
 }
 
-// 2. We wrap the child component in Suspense and export it
+// 2. The main export only renders the Suspense wrapper
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <Suspense fallback={<div className="flex h-screen items-center justify-center">Loading Dashboard...</div>}>
