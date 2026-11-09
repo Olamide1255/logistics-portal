@@ -9,7 +9,6 @@ export default function ShipmentDetails() {
   const params = useParams();
   const router = useRouter();
   
-  // Decode the URL parameter (converts %20 to a space) and trim any extra spaces
   const rawAwb = params.awb as string;
   const awb = decodeURIComponent(rawAwb).trim();
 
@@ -36,7 +35,6 @@ export default function ShipmentDetails() {
   const fetchData = async () => {
     setLoading(true);
     
-    // Get User Role
     const { data: { user } } = await supabase.auth.getUser();
     if (user?.email) {
       const prefix = user.email.split('@')[0].toLowerCase();
@@ -49,7 +47,6 @@ export default function ShipmentDetails() {
       setUserRole(role);
     }
 
-    // Get Shipment (using .ilike for case-insensitive matching)
     const { data: shipData, error } = await supabase
       .from('shipments')
       .select(`*, clients (client_name)`)
@@ -86,6 +83,32 @@ export default function ShipmentDetails() {
   useEffect(() => {
     if (awb) fetchData();
   }, [awb]);
+
+  // --- REALTIME SYNCHRONIZATION ---
+  useEffect(() => {
+    if (!shipment?.id) return;
+
+    // Subscribe to changes specific to this shipment
+    const channel = supabase
+      .channel(`shipment_${shipment.id}`)
+      // 1. Listen for new comments
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shipment_comments', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
+        setComments((prev) => [...prev, payload.new]);
+      })
+      // 2. Listen for new timeline entries
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shipment_timeline', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
+        setTimeline((prev) => [payload.new, ...prev]);
+      })
+      // 3. Listen for status / payment updates on the shipment itself
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'shipments', filter: `id=eq.${shipment.id}` }, (payload) => {
+        setShipment((prev: any) => ({ ...prev, ...payload.new }));
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [shipment?.id]);
 
   // --- DELETE FUNCTION ---
   const handleDelete = async () => {
@@ -135,7 +158,7 @@ export default function ShipmentDetails() {
       }]);
       
       setIsEditing(false);
-      await fetchData();
+      // No need to fetchData(), Realtime will update the state!
     }
     setIsSubmitting(false);
   };
@@ -145,7 +168,6 @@ export default function ShipmentDetails() {
     if (!actionBy) return alert('Please enter your name in the "Action By" field first.');
     setIsSubmitting(true);
     
-    // 1. Update Database
     await supabase.from('shipments').update({ payment_status: 'Approved' }).eq('id', shipment.id);
     await supabase.from('shipment_timeline').insert([{
       shipment_id: shipment.id,
@@ -155,7 +177,6 @@ export default function ShipmentDetails() {
       action_by_name: actionBy
     }]);
 
-    // 2. Notify RFS (Action Needed) AND CS (Status Update)
     await supabase.from('notifications').insert([
       {
         role_target: 'RFS',
@@ -172,8 +193,8 @@ export default function ShipmentDetails() {
     ]);
 
     setActionBy('');
-    await fetchData();
     setIsSubmitting(false);
+    // Realtime will update the UI instantly
   };
 
   const handleUpdateStatus = async () => {
@@ -181,7 +202,6 @@ export default function ShipmentDetails() {
     if (!actionBy) return alert('Please enter your name in the "Action By" field.');
     setIsSubmitting(true);
 
-    // 1. Update Database
     await supabase.from('shipments').update({ current_status: newStatus }).eq('id', shipment.id);
     await supabase.from('shipment_timeline').insert([{
       shipment_id: shipment.id,
@@ -191,10 +211,8 @@ export default function ShipmentDetails() {
       action_by_name: actionBy
     }]);
 
-    // 2. Prepare Notifications Array
     const notificationsToSend = [];
 
-    // Notify Next Team (Action Needed)
     if (newStatus === 'Picked Up' || newStatus === 'Handed to Ops') {
       notificationsToSend.push({
         role_target: 'Operations',
@@ -204,7 +222,6 @@ export default function ShipmentDetails() {
       });
     }
 
-    // Always Notify Customer Service of updates made by RFS/Ops (So they can update the client)
     if (userRole !== 'Customer Service') {
       notificationsToSend.push({
         role_target: 'Customer Service',
@@ -214,7 +231,6 @@ export default function ShipmentDetails() {
       });
     }
 
-    // Notify Finance when delivered
     if (newStatus === 'Delivered') {
       notificationsToSend.push({
         role_target: 'Finance',
@@ -224,7 +240,6 @@ export default function ShipmentDetails() {
       });
     }
 
-    // Send all notifications in one efficient database call
     if (notificationsToSend.length > 0) {
       await supabase.from('notifications').insert(notificationsToSend);
     }
@@ -232,8 +247,8 @@ export default function ShipmentDetails() {
     setNewStatus('');
     setStatusNotes('');
     setActionBy('');
-    await fetchData();
     setIsSubmitting(false);
+    // Realtime will update the UI instantly
   };
 
   const handleAddComment = async (e: React.FormEvent) => {
@@ -248,13 +263,12 @@ export default function ShipmentDetails() {
     }]);
 
     setNewComment('');
-    await fetchData();
+    // Realtime will update the UI instantly
   };
 
   if (loading) return <div className="p-10 text-center text-slate-500 animate-pulse">Loading shipment details...</div>;
   if (!shipment) return <div className="p-10 text-center text-red-500 font-bold">Shipment not found.</div>;
 
-  // Determine if user can edit/delete (Only Admin and CS)
   const canEditOrDelete = userRole === 'Super Admin' || userRole === 'Customer Service';
 
   return (
@@ -361,7 +375,6 @@ export default function ShipmentDetails() {
                 />
               </div>
 
-              {/* FINANCE APPROVAL BUTTON */}
               {shipment.payment_status === 'Pending' && (userRole === 'Finance' || userRole === 'Super Admin') && (
                 <div className="mb-6 p-4 bg-white border border-amber-200 rounded-xl shadow-sm">
                   <p className="text-amber-700 font-bold mb-3 flex items-center gap-2"><Clock size={18}/> Awaiting Finance Approval</p>
@@ -371,7 +384,6 @@ export default function ShipmentDetails() {
                 </div>
               )}
 
-              {/* STATUS UPDATE FORM */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">New Status</label>
