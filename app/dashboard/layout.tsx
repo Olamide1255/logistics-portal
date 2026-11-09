@@ -224,7 +224,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                     <h3 className="font-bold text-slate-800">Notifications</h3>
                     <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-slate-600"><X size={16}/></button>
                   </div>
-                  <div className="max-h-[400px] overflow-y-auto">
+                  <div className="max-h-100 overflow-y-auto">
                     {notifications.length === 0 && <p className="p-6 text-center text-slate-500 text-sm">You're all caught up!</p>}
                     {notifications.map(n => (
                       <div 
