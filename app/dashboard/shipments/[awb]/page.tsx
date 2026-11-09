@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams, useRouter } from 'next/navigation';
-import { CheckCircle, Clock, MessageSquare, Send, ArrowLeft } from 'lucide-react';
+import { CheckCircle, Clock, MessageSquare, Send, ArrowLeft, Edit, Trash2, Save, X } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ShipmentDetails() {
@@ -15,11 +15,15 @@ export default function ShipmentDetails() {
   const [comments, setComments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Edit State
+  const [isEditing, setIsEditing] = useState(false);
+  const [editFormData, setEditFormData] = useState<any>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   // Status Update State
   const [newStatus, setNewStatus] = useState('');
   const [statusNotes, setStatusNotes] = useState('');
-  const [actionBy, setActionBy] = useState(''); // e.g., "John (RFS)"
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [actionBy, setActionBy] = useState(''); 
 
   // Comment State
   const [newComment, setNewComment] = useState('');
@@ -27,7 +31,6 @@ export default function ShipmentDetails() {
 
   const fetchData = async () => {
     setLoading(true);
-    // 1. Get Shipment
     const { data: shipData, error } = await supabase
       .from('shipments')
       .select(`*, clients (client_name)`)
@@ -41,9 +44,9 @@ export default function ShipmentDetails() {
     }
 
     setShipment(shipData);
+    setEditFormData(shipData); // Pre-fill the edit form
 
     if (shipData) {
-      // 2. Get Timeline
       const { data: timeData } = await supabase
         .from('shipment_timeline')
         .select('*')
@@ -51,7 +54,6 @@ export default function ShipmentDetails() {
         .order('created_at', { ascending: false });
       setTimeline(timeData || []);
 
-      // 3. Get Comments
       const { data: commData } = await supabase
         .from('shipment_comments')
         .select('*')
@@ -66,12 +68,65 @@ export default function ShipmentDetails() {
     if (awb) fetchData();
   }, [awb]);
 
+  // --- DELETE FUNCTION ---
+  const handleDelete = async () => {
+    const confirmDelete = window.confirm(`Are you sure you want to permanently delete shipment ${awb}? This action cannot be undone.`);
+    if (!confirmDelete) return;
+    
+    setIsSubmitting(true);
+    const { error } = await supabase.from('shipments').delete().eq('id', shipment.id);
+    
+    if (error) {
+      alert("Error deleting shipment: " + error.message);
+      setIsSubmitting(false);
+    } else {
+      router.push('/dashboard/shipments');
+    }
+  };
+
+  // --- EDIT FUNCTIONS ---
+  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEditFormData({ ...editFormData, [e.target.name]: e.target.value });
+  };
+
+  const handleSaveEdit = async () => {
+    setIsSubmitting(true);
+    const { error } = await supabase
+      .from('shipments')
+      .update({
+        sender_details: editFormData.sender_details,
+        receiver_details: editFormData.receiver_details,
+        weight: parseFloat(editFormData.weight),
+        dimensions: editFormData.dimensions,
+        origin: editFormData.origin,
+        destination: editFormData.destination,
+        commodity_type: editFormData.commodity_type,
+      })
+      .eq('id', shipment.id);
+
+    if (error) {
+      alert("Error saving changes: " + error.message);
+    } else {
+      // Log the edit in the timeline
+      await supabase.from('shipment_timeline').insert([{
+        shipment_id: shipment.id,
+        status_dropdown: 'Details Edited',
+        status_notes: 'Shipment information was manually corrected/updated.',
+        updated_by_role: 'System',
+        action_by_name: 'Admin/CS'
+      }]);
+      
+      setIsEditing(false);
+      await fetchData();
+    }
+    setIsSubmitting(false);
+  };
+
+  // --- STATUS & COMMENT FUNCTIONS ---
   const handleApprovePayment = async () => {
     if (!actionBy) return alert('Please enter your name in the "Action By" field first.');
-    setIsUpdating(true);
-
+    setIsSubmitting(true);
     await supabase.from('shipments').update({ payment_status: 'Approved' }).eq('id', shipment.id);
-    
     await supabase.from('shipment_timeline').insert([{
       shipment_id: shipment.id,
       status_dropdown: 'Finance Approved',
@@ -79,21 +134,17 @@ export default function ShipmentDetails() {
       updated_by_role: 'Finance',
       action_by_name: actionBy
     }]);
-
     setActionBy('');
     await fetchData();
-    setIsUpdating(false);
+    setIsSubmitting(false);
   };
 
   const handleUpdateStatus = async () => {
     if (!newStatus) return alert('Please select a status.');
     if (!actionBy) return alert('Please enter your name in the "Action By" field.');
-    setIsUpdating(true);
+    setIsSubmitting(true);
 
-    // Update main shipment table
     await supabase.from('shipments').update({ current_status: newStatus }).eq('id', shipment.id);
-
-    // Add to timeline
     await supabase.from('shipment_timeline').insert([{
       shipment_id: shipment.id,
       status_dropdown: newStatus,
@@ -106,7 +157,7 @@ export default function ShipmentDetails() {
     setStatusNotes('');
     setActionBy('');
     await fetchData();
-    setIsUpdating(false);
+    setIsSubmitting(false);
   };
 
   const handleAddComment = async (e: React.FormEvent) => {
@@ -131,11 +182,34 @@ export default function ShipmentDetails() {
     <div className="max-w-6xl mx-auto space-y-6">
       
       {/* HEADER */}
-      <div className="flex items-center gap-4 mb-2">
-        <Link href="/dashboard/shipments" className="text-gray-500 hover:text-gray-800">
-          <ArrowLeft size={24} />
-        </Link>
-        <h1 className="text-2xl font-bold text-gray-800">Back to Shipments</h1>
+      <div className="flex justify-between items-center mb-2">
+        <div className="flex items-center gap-4">
+          <Link href="/dashboard/shipments" className="text-gray-500 hover:text-gray-800">
+            <ArrowLeft size={24} />
+          </Link>
+          <h1 className="text-2xl font-bold text-gray-800">Back to Shipments</h1>
+        </div>
+        
+        {/* EDIT / DELETE BUTTONS */}
+        {!isEditing ? (
+          <div className="flex gap-2">
+            <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 transition">
+              <Edit size={16} /> Edit
+            </button>
+            <button onClick={handleDelete} disabled={isSubmitting} className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded hover:bg-red-100 transition">
+              <Trash2 size={16} /> Delete
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 transition">
+              <X size={16} /> Cancel
+            </button>
+            <button onClick={handleSaveEdit} disabled={isSubmitting} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+              <Save size={16} /> {isSubmitting ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="bg-white p-6 rounded-lg shadow border border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -159,73 +233,89 @@ export default function ShipmentDetails() {
         {/* LEFT COLUMN: Details & Actions */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* DETAILS GRID */}
+          {/* DETAILS GRID (Now conditionally editable) */}
           <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
             <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Shipment Details</h2>
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div><span className="text-gray-500 block">Sender</span> <span className="text-gray-900 font-medium">{shipment.sender_details}</span></div>
-              <div><span className="text-gray-500 block">Receiver</span> <span className="text-gray-900 font-medium">{shipment.receiver_details}</span></div>
-              <div><span className="text-gray-500 block">Origin</span> <span className="text-gray-900 font-medium">{shipment.origin}</span></div>
-              <div><span className="text-gray-500 block">Destination</span> <span className="text-gray-900 font-medium">{shipment.destination}</span></div>
-              <div><span className="text-gray-500 block">Commodity</span> <span className="text-gray-900 font-medium">{shipment.commodity_type}</span></div>
-              <div><span className="text-gray-500 block">Weight / Dims</span> <span className="text-gray-900 font-medium">{shipment.weight} kg / {shipment.dimensions}</span></div>
+              {isEditing ? (
+                <>
+                  <div><label className="text-gray-500 block mb-1">Sender</label> <input name="sender_details" value={editFormData.sender_details || ''} onChange={handleEditChange} className="w-full border p-2 rounded text-gray-900" /></div>
+                  <div><label className="text-gray-500 block mb-1">Receiver</label> <input name="receiver_details" value={editFormData.receiver_details || ''} onChange={handleEditChange} className="w-full border p-2 rounded text-gray-900" /></div>
+                  <div><label className="text-gray-500 block mb-1">Origin</label> <input name="origin" value={editFormData.origin || ''} onChange={handleEditChange} className="w-full border p-2 rounded text-gray-900" /></div>
+                  <div><label className="text-gray-500 block mb-1">Destination</label> <input name="destination" value={editFormData.destination || ''} onChange={handleEditChange} className="w-full border p-2 rounded text-gray-900" /></div>
+                  <div><label className="text-gray-500 block mb-1">Commodity</label> <input name="commodity_type" value={editFormData.commodity_type || ''} onChange={handleEditChange} className="w-full border p-2 rounded text-gray-900" /></div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><label className="text-gray-500 block mb-1">Weight (kg)</label> <input type="number" step="0.01" name="weight" value={editFormData.weight || ''} onChange={handleEditChange} className="w-full border p-2 rounded text-gray-900" /></div>
+                    <div><label className="text-gray-500 block mb-1">Dims</label> <input name="dimensions" value={editFormData.dimensions || ''} onChange={handleEditChange} className="w-full border p-2 rounded text-gray-900" /></div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div><span className="text-gray-500 block">Sender</span> <span className="text-gray-900 font-medium">{shipment.sender_details}</span></div>
+                  <div><span className="text-gray-500 block">Receiver</span> <span className="text-gray-900 font-medium">{shipment.receiver_details}</span></div>
+                  <div><span className="text-gray-500 block">Origin</span> <span className="text-gray-900 font-medium">{shipment.origin}</span></div>
+                  <div><span className="text-gray-500 block">Destination</span> <span className="text-gray-900 font-medium">{shipment.destination}</span></div>
+                  <div><span className="text-gray-500 block">Commodity</span> <span className="text-gray-900 font-medium">{shipment.commodity_type}</span></div>
+                  <div><span className="text-gray-500 block">Weight / Dims</span> <span className="text-gray-900 font-medium">{shipment.weight} kg / {shipment.dimensions}</span></div>
+                </>
+              )}
             </div>
           </div>
 
           {/* ACTION PANEL */}
-          <div className="bg-gray-50 p-6 rounded-lg shadow border border-gray-200">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Action Panel</h2>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-bold text-gray-700 mb-1">Action By (Your Name / Dept) *</label>
-              <input 
-                type="text" 
-                placeholder="e.g. John Doe (RFS)" 
-                value={actionBy} 
-                onChange={e => setActionBy(e.target.value)}
-                className="w-full border p-2 rounded text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
+          {!isEditing && (
+            <div className="bg-gray-50 p-6 rounded-lg shadow border border-gray-200">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">Action Panel</h2>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-bold text-gray-700 mb-1">Action By (Your Name / Dept) *</label>
+                <input 
+                  type="text" 
+                  placeholder="e.g. John Doe (RFS)" 
+                  value={actionBy} 
+                  onChange={e => setActionBy(e.target.value)}
+                  className="w-full border p-2 rounded text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
 
-            {/* Finance Approval Button */}
-            {shipment.payment_status === 'Pending' && (
-              <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded">
-                <p className="text-orange-800 font-semibold mb-2">Awaiting Finance Approval</p>
-                <button onClick={handleApprovePayment} disabled={isUpdating} className="bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-700 flex items-center gap-2 transition">
-                  <CheckCircle size={18} /> {isUpdating ? 'Processing...' : 'Approve Payment & Release'}
-                </button>
-              </div>
-            )}
+              {shipment.payment_status === 'Pending' && (
+                <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded">
+                  <p className="text-orange-800 font-semibold mb-2">Awaiting Finance Approval</p>
+                  <button onClick={handleApprovePayment} disabled={isSubmitting} className="bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-700 flex items-center gap-2 transition">
+                    <CheckCircle size={18} /> {isSubmitting ? 'Processing...' : 'Approve Payment & Release'}
+                  </button>
+                </div>
+              )}
 
-            {/* Status Update Form */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">New Status</label>
-                <select value={newStatus} onChange={e => setNewStatus(e.target.value)} className="w-full border p-2 rounded text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500">
-                  <option value="">Select Status...</option>
-                  <option value="Picked Up">Picked Up (RFS)</option>
-                  <option value="Handed to Ops">Handed to Ops</option>
-                  <option value="Export Cleared">Export Cleared (Ops)</option>
-                  <option value="Handed to Airline">Handed to Airline</option>
-                  <option value="Delivered">Delivered</option>
-                </select>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">New Status</label>
+                  <select value={newStatus} onChange={e => setNewStatus(e.target.value)} className="w-full border p-2 rounded text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Select Status...</option>
+                    <option value="Picked Up">Picked Up (RFS)</option>
+                    <option value="Handed to Ops">Handed to Ops</option>
+                    <option value="Export Cleared">Export Cleared (Ops)</option>
+                    <option value="Handed to Airline">Handed to Airline</option>
+                    <option value="Delivered">Delivered</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Additional Notes</label>
+                  <input type="text" placeholder="Optional details..." value={statusNotes} onChange={e => setStatusNotes(e.target.value)} className="w-full border p-2 rounded text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500" />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Additional Notes</label>
-                <input type="text" placeholder="Optional details..." value={statusNotes} onChange={e => setStatusNotes(e.target.value)} className="w-full border p-2 rounded text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500" />
-              </div>
+              <button onClick={handleUpdateStatus} disabled={isSubmitting} className="mt-4 bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700 transition">
+                {isSubmitting ? 'Updating...' : 'Update Status'}
+              </button>
             </div>
-            <button onClick={handleUpdateStatus} disabled={isUpdating} className="mt-4 bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700 transition">
-              {isUpdating ? 'Updating...' : 'Update Status'}
-            </button>
-          </div>
+          )}
 
         </div>
 
         {/* RIGHT COLUMN: Timeline & Comments */}
         <div className="space-y-6">
           
-          {/* TIMELINE */}
           <div className="bg-white p-6 rounded-lg shadow border border-gray-200 h-96 overflow-y-auto">
             <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><Clock size={20}/> Timeline</h2>
             <div className="space-y-4 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-gray-200 before:to-transparent">
@@ -248,7 +338,6 @@ export default function ShipmentDetails() {
             </div>
           </div>
 
-          {/* COMMENTS */}
           <div className="bg-white p-6 rounded-lg shadow border border-gray-200 flex flex-col h-96">
             <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><MessageSquare size={20}/> Team Comments</h2>
             
