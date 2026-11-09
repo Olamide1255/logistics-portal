@@ -14,7 +14,14 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [pushEnabled, setPushEnabled] = useState(false); 
+  
+  // Initialize pushEnabled based on browser's native permission
+  const [pushEnabled, setPushEnabled] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission === 'granted';
+    }
+    return false;
+  });
   
   const router = useRouter();
   const pathname = usePathname(); 
@@ -40,7 +47,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             appId: '3bb74c5f-1956-404a-b6c9-7e84c7b070d8',
           }).then(() => {
             OneSignal.User.addTag('role', role);
-            if (OneSignal.Notifications.permission) {
+            // Double check permission after OneSignal initializes
+            if (Notification.permission === 'granted' || OneSignal.Notifications.permission) {
               setPushEnabled(true);
             }
           }).catch((err) => console.error("OneSignal Error:", err));
@@ -97,12 +105,18 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   };
 
   const requestPushPermission = async () => {
-    await OneSignal.Notifications.requestPermission();
-    if (OneSignal.Notifications.permission) {
-      setPushEnabled(true);
-      toast.success('Push notifications enabled!');
-    } else {
-      toast.error('Push notifications were blocked. Please check browser settings.');
+    try {
+      await OneSignal.Notifications.requestPermission();
+      
+      // Check native browser permission to confirm
+      if (Notification.permission === 'granted') {
+        setPushEnabled(true);
+        toast.success('Push notifications enabled!');
+      } else {
+        toast.error('Notifications were blocked. Please enable them in your browser settings.');
+      }
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -143,7 +157,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             <Package size={20} /> All Shipments
           </Link>
 
-          {/* NEW FINANCE REPORTS LINK */}
           {(userRole === 'Finance' || userRole === 'Super Admin') && (
             <Link href="/dashboard/clients" className={`flex items-center gap-3 p-3 rounded transition ${pathname.includes('/dashboard/clients') ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-100'}`}>
               <Users size={20} /> Client Reports
@@ -168,6 +181,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-4">
+            
+            {/* Show button ONLY if pushEnabled is false */}
             {!pushEnabled && (
               <button 
                 onClick={requestPushPermission}
