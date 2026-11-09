@@ -32,41 +32,44 @@ export default function RegisterShipment() {
     setError('');
     setSuccess('');
 
-    try {
+        try {
       // 1. Check if AWB already exists
       const { data: existingShipment } = await supabase
         .from('shipments')
         .select('awb_number')
         .eq('awb_number', formData.awb_number)
-        .single();
+        .maybeSingle(); // Changed to maybeSingle
 
       if (existingShipment) {
         throw new Error('A shipment with this AWB Number already exists!');
       }
 
-      // 2. Check if Client exists, if not, create one
+      // 2. Check if Client exists
       let clientId;
       const { data: existingClient } = await supabase
         .from('clients')
         .select('id')
-        .ilike('client_name', formData.client_name) // case-insensitive search
-        .single();
+        .ilike('client_name', formData.client_name) 
+        .maybeSingle(); // Changed to maybeSingle
 
       if (existingClient) {
         clientId = existingClient.id;
       } else {
-        // Create new client
+        // 3. Create new client
         const { data: newClient, error: clientError } = await supabase
           .from('clients')
           .insert([{ client_name: formData.client_name }])
           .select()
-          .single();
+          .single(); // This one stays .single() because we just inserted it and expect 1 result
         
-        if (clientError) throw new Error('Failed to create client profile.');
+        if (clientError) {
+          console.error("Supabase Insert Error:", clientError); // Logs to browser console
+          throw new Error(`Database Error: ${clientError.message}`); // Shows real error on screen
+        }
         clientId = newClient.id;
       }
 
-      // 3. Insert the Shipment
+      // 4. Insert the Shipment
       const { error: shipmentError } = await supabase.from('shipments').insert([
         {
           awb_number: formData.awb_number,
@@ -86,7 +89,7 @@ export default function RegisterShipment() {
       if (shipmentError) throw shipmentError;
 
       setSuccess('Shipment registered successfully!');
-      setTimeout(() => router.push('/dashboard/shipments'), 2000); // Redirect after 2 seconds
+      setTimeout(() => router.push('/dashboard/shipments'), 2000); 
 
     } catch (err: any) {
       setError(err.message);
