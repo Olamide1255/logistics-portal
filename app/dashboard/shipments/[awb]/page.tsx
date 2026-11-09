@@ -53,7 +53,7 @@ export default function ShipmentDetails() {
     const { data: shipData, error } = await supabase
       .from('shipments')
       .select(`*, clients (client_name)`)
-      .ilike('awb_number', awb) // <-- ILIKE handles case sensitivity
+      .ilike('awb_number', awb) // ILIKE handles case sensitivity
       .single();
     
     if (error) {
@@ -389,9 +389,10 @@ export default function ShipmentDetails() {
         {/* RIGHT COLUMN */}
         <div className="space-y-6">
           
-          <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60 h-[450px] overflow-y-auto">
+          {/* TIMELINE (Fixed classes: h-112.5 and before:bg-linear-to-b) */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60 h-112.5 overflow-y-auto">
             <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2"><Clock size={20} className="text-indigo-500"/> Timeline</h2>
-            <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
+            <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-linear-to-b before:from-transparent before:via-slate-200 before:to-transparent">
               {timeline.length === 0 && <p className="text-slate-500 text-sm italic">No updates yet.</p>}
               {timeline.map((item, i) => (
                 <div key={i} className="relative flex items-center justify-between md:justify-normal group is-active">
@@ -411,7 +412,8 @@ export default function ShipmentDetails() {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60 flex flex-col h-[450px]">
+          {/* COMMENTS (Fixed class: h-112.5) */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60 flex flex-col h-112.5">
             <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2"><MessageSquare size={20} className="text-indigo-500"/> Team Comments</h2>
             
             <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
