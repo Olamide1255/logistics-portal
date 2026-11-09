@@ -19,8 +19,9 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         router.push('/login');
       } else {
         setEmail(user.email || '');
-        const prefix = user.email?.split('@')[0].toLowerCase();
-        if (prefix?.includes('admin')) setUserRole('Super Admin');
+       const prefix = user.email?.split('@')[0].toLowerCase();
+        // UPDATE THIS LINE:
+        if (prefix?.includes('admin') || prefix?.includes('it')) setUserRole('Super Admin'); 
         else if (prefix?.includes('finance')) setUserRole('Finance');
         else if (prefix?.includes('cs')) setUserRole('Customer Service');
         else if (prefix?.includes('rfs')) setUserRole('RFS');
