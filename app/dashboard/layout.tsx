@@ -6,8 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Package, PlusCircle, LogOut, LayoutDashboard, Menu, X, Bell } from 'lucide-react';
-import { Toaster, toast } from 'sonner'; // Added Toast
-
+import { Toaster, toast } from 'sonner';
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<string>('Loading...');
@@ -35,16 +34,15 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         else if (prefix?.includes('ops')) role = 'Operations';
         setUserRole(role);
 
-          // Initialize OneSignal
+        // INITIALIZE ONESIGNAL
         if (typeof window !== 'undefined') {
           OneSignal.init({
-            appId: '3bb74c5f-1956-404a-b6c9-7e84c7b070d8', // <-- PASTE YOUR APP ID HERE
-            notifyButton: { enable: false }, // We use our own bell icon
+            appId: '3bb74c5f-1956-404a-b6c9-7e84c7b070d8', // Your App ID
+            notifyButton: { enable: false }, 
           }).then(() => {
-            // Tag the user with their role so we can target them
             OneSignal.User.addTag('role', role);
             console.log('OneSignal initialized and role tag set to:', role);
-          });
+          }).catch((err) => console.error("OneSignal Error:", err));
         }
 
         // Fetch initial notifications
@@ -63,10 +61,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             'postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'notifications', filter: `role_target=eq.${role}` },
             (payload) => {
-              // Add new notification to state
               setNotifications((prev) => [payload.new, ...prev]);
-              
-              // Show Pop-up Banner
               toast(payload.new.title, {
                 description: payload.new.message,
                 action: {
@@ -112,7 +107,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />
       )}
 
-      {/* SIDEBAR */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0`}>
         <div className="p-6 border-b border-gray-200 flex justify-between items-center">
           <div>
@@ -148,10 +142,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      {/* MAIN CONTENT AREA */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        
-        {/* HEADER (Now with Bell Icon) */}
         <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between z-30">
           <div className="flex items-center gap-4">
             <button onClick={() => setIsSidebarOpen(true)} className="md:hidden text-gray-600">
@@ -160,7 +151,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             <h1 className="text-lg font-bold text-gray-800 hidden md:block">Dashboard</h1>
           </div>
 
-          {/* NOTIFICATION BELL */}
           <div className="relative">
             <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full relative">
               <Bell size={24} />
@@ -171,7 +161,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
               )}
             </button>
 
-            {/* NOTIFICATION DROPDOWN */}
             {showNotifications && (
               <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden">
                 <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
