@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Package, PlusCircle, LogOut, LayoutDashboard, Menu, X, Bell } from 'lucide-react';
+import { Package, PlusCircle, LogOut, LayoutDashboard, Menu, X, Bell, BellRing } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
@@ -14,6 +14,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false); // Track push status
   
   const router = useRouter();
   const pathname = usePathname(); 
@@ -34,14 +35,15 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         else if (prefix?.includes('ops')) role = 'Operations';
         setUserRole(role);
 
-        // INITIALIZE ONESIGNAL
+        // INITIALIZE ONESIGNAL (Fixed TS error by removing strict notifyButton)
         if (typeof window !== 'undefined') {
           OneSignal.init({
-            appId: '3bb74c5f-1956-404a-b6c9-7e84c7b070d8', // Your App ID
-            notifyButton: { enable: false }, 
+            appId: '3bb74c5f-1956-404a-b6c9-7e84c7b070d8',
           }).then(() => {
             OneSignal.User.addTag('role', role);
-            console.log('OneSignal initialized and role tag set to:', role);
+            if (OneSignal.Notifications.permission) {
+              setPushEnabled(true);
+            }
           }).catch((err) => console.error("OneSignal Error:", err));
         }
 
@@ -95,6 +97,17 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const markAsRead = async (id: string) => {
     await supabase.from('notifications').update({ is_read: true }).eq('id', id);
     setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
+  };
+
+  // Function to request permission via button click
+  const requestPushPermission = async () => {
+    await OneSignal.Notifications.requestPermission();
+    if (OneSignal.Notifications.permission) {
+      setPushEnabled(true);
+      toast.success('Push notifications enabled!');
+    } else {
+      toast.error('Push notifications were blocked. Please check browser settings.');
+    }
   };
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
@@ -151,44 +164,58 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             <h1 className="text-lg font-bold text-gray-800 hidden md:block">Dashboard</h1>
           </div>
 
-          <div className="relative">
-            <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full relative">
-              <Bell size={24} />
-              {unreadCount > 0 && (
-                <span className="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">
-                  {unreadCount}
-                </span>
-              )}
-            </button>
-
-            {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden">
-                <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-                  <h3 className="font-bold text-gray-800">Notifications</h3>
-                  <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-600"><X size={16}/></button>
-                </div>
-                <div className="max-h-96 overflow-y-auto">
-                  {notifications.length === 0 && <p className="p-4 text-center text-gray-500 text-sm">No notifications.</p>}
-                  {notifications.map(n => (
-                    <div 
-                      key={n.id} 
-                      onClick={() => {
-                        markAsRead(n.id);
-                        if (n.shipment_awb) router.push(`/dashboard/shipments/${n.shipment_awb}`);
-                        setShowNotifications(false);
-                      }}
-                      className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition ${!n.is_read ? 'bg-blue-50' : ''}`}
-                    >
-                      <div className="flex justify-between items-start mb-1">
-                        <p className={`text-sm ${!n.is_read ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>{n.title}</p>
-                        <span className="text-xs text-gray-400">{new Date(n.created_at).toLocaleDateString()}</span>
-                      </div>
-                      <p className="text-xs text-gray-500">{n.message}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+          <div className="flex items-center gap-4">
+            
+            {/* PUSH NOTIFICATION PROMPT BUTTON */}
+            {!pushEnabled && (
+              <button 
+                onClick={requestPushPermission}
+                className="flex items-center gap-2 bg-blue-100 text-blue-700 px-3 py-1.5 rounded-full text-sm font-medium hover:bg-blue-200 transition animate-pulse"
+              >
+                <BellRing size={16} /> Enable Alerts
+              </button>
             )}
+
+            {/* NOTIFICATION BELL */}
+            <div className="relative">
+              <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full relative">
+                <Bell size={24} />
+                {unreadCount > 0 && (
+                  <span className="absolute top-0 right-0 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {showNotifications && (
+                <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden">
+                  <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                    <h3 className="font-bold text-gray-800">Notifications</h3>
+                    <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-600"><X size={16}/></button>
+                  </div>
+                  <div className="max-h-96 overflow-y-auto">
+                    {notifications.length === 0 && <p className="p-4 text-center text-gray-500 text-sm">No notifications.</p>}
+                    {notifications.map(n => (
+                      <div 
+                        key={n.id} 
+                        onClick={() => {
+                          markAsRead(n.id);
+                          if (n.shipment_awb) router.push(`/dashboard/shipments/${n.shipment_awb}`);
+                          setShowNotifications(false);
+                        }}
+                        className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition ${!n.is_read ? 'bg-blue-50' : ''}`}
+                      >
+                        <div className="flex justify-between items-start mb-1">
+                          <p className={`text-sm ${!n.is_read ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>{n.title}</p>
+                          <span className="text-xs text-gray-400">{new Date(n.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <p className="text-xs text-gray-500">{n.message}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 

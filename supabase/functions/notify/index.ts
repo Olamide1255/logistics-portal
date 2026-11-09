@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID')
@@ -14,7 +15,6 @@ serve(async (req) => {
         filters: [{ field: "tag", key: "role", relation: "=", value: record.role_target }],
         headings: { en: record.title },
         contents: { en: record.message },
-        // When they click the push, it takes them to the shipment page
         url: record.shipment_awb 
              ? `https://logistics-portal-mu.vercel.app/dashboard/shipments/${record.shipment_awb}` 
              : "https://logistics-portal-mu.vercel.app/dashboard"
