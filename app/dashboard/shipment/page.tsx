@@ -9,12 +9,14 @@ export default function ShipmentsList() {
 
   useEffect(() => {
     const fetchShipments = async () => {
+      // Fetch shipments and join with the clients table
       const { data, error } = await supabase
         .from('shipments')
         .select(`*, clients (client_name)`)
         .order('created_at', { ascending: false });
       
       if (data) setShipments(data);
+      if (error) console.error("Error fetching shipments:", error);
       setLoading(false);
     };
     fetchShipments();
@@ -25,8 +27,11 @@ export default function ShipmentsList() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">All Shipments</h1>
-        <Link href="/dashboard/register" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800">All Shipments</h1>
+          <p className="text-gray-500">View and manage all registered shipments.</p>
+        </div>
+        <Link href="/dashboard/register" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium transition">
           + New Shipment
         </Link>
       </div>
@@ -45,10 +50,14 @@ export default function ShipmentsList() {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {shipments.length === 0 && (
-              <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-500">No shipments found. Click "New Shipment" to create one.</td></tr>
+              <tr>
+                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                  No shipments found. Click "New Shipment" to create one.
+                </td>
+              </tr>
             )}
             {shipments.map((shipment) => (
-              <tr key={shipment.id} className="hover:bg-gray-50">
+              <tr key={shipment.id} className="hover:bg-gray-50 transition">
                 <td className="px-6 py-4 whitespace-nowrap font-bold text-blue-600">
                   <Link href={`/dashboard/shipments/${shipment.awb_number}`}>{shipment.awb_number}</Link>
                 </td>
