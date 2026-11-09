@@ -9,7 +9,6 @@ export default function ShipmentsList() {
 
   useEffect(() => {
     const fetchShipments = async () => {
-      // Fetch shipments and join with the clients table
       const { data, error } = await supabase
         .from('shipments')
         .select(`*, clients (client_name)`)
@@ -26,17 +25,17 @@ export default function ShipmentsList() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">All Shipments</h1>
-          <p className="text-gray-500">View and manage all registered shipments.</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-800">All Shipments</h1>
+          <p className="text-gray-500 text-sm md:text-base">View and manage all registered shipments.</p>
         </div>
-        <Link href="/dashboard/register" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium transition">
+        <Link href="/dashboard/register" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium transition w-full md:w-auto text-center">
           + New Shipment
         </Link>
       </div>
       
-      <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
+      <div className="bg-white rounded-lg shadow overflow-x-auto border border-gray-200">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
