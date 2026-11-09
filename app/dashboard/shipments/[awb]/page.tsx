@@ -53,7 +53,7 @@ export default function ShipmentDetails() {
     const { data: shipData, error } = await supabase
       .from('shipments')
       .select(`*, clients (client_name)`)
-      .ilike('awb_number', awb) // ILIKE handles case sensitivity
+      .ilike('awb_number', awb)
       .single();
     
     if (error) {
@@ -144,6 +144,8 @@ export default function ShipmentDetails() {
   const handleApprovePayment = async () => {
     if (!actionBy) return alert('Please enter your name in the "Action By" field first.');
     setIsSubmitting(true);
+    
+    // 1. Update Database
     await supabase.from('shipments').update({ payment_status: 'Approved' }).eq('id', shipment.id);
     await supabase.from('shipment_timeline').insert([{
       shipment_id: shipment.id,
@@ -153,13 +155,21 @@ export default function ShipmentDetails() {
       action_by_name: actionBy
     }]);
 
-    // NOTIFY RFS
-    await supabase.from('notifications').insert([{
-      role_target: 'RFS',
-      title: 'Shipment Ready for Pickup',
-      message: `AWB ${shipment.awb_number} has been approved by Finance and is ready for pickup.`,
-      shipment_awb: shipment.awb_number
-    }]);
+    // 2. Notify RFS (Action Needed) AND CS (Status Update)
+    await supabase.from('notifications').insert([
+      {
+        role_target: 'RFS',
+        title: 'Action Needed: Shipment Ready for Pickup',
+        message: `AWB ${shipment.awb_number} was approved by ${actionBy}. Ready for pickup.`,
+        shipment_awb: shipment.awb_number
+      },
+      {
+        role_target: 'Customer Service',
+        title: 'Payment Approved',
+        message: `Finance (${actionBy}) approved payment for AWB ${shipment.awb_number}.`,
+        shipment_awb: shipment.awb_number
+      }
+    ]);
 
     setActionBy('');
     await fetchData();
@@ -171,6 +181,7 @@ export default function ShipmentDetails() {
     if (!actionBy) return alert('Please enter your name in the "Action By" field.');
     setIsSubmitting(true);
 
+    // 1. Update Database
     await supabase.from('shipments').update({ current_status: newStatus }).eq('id', shipment.id);
     await supabase.from('shipment_timeline').insert([{
       shipment_id: shipment.id,
@@ -180,28 +191,42 @@ export default function ShipmentDetails() {
       action_by_name: actionBy
     }]);
 
-    // NOTIFY NEXT TEAM
-    if (newStatus === 'Picked Up') {
-      await supabase.from('notifications').insert([{
+    // 2. Prepare Notifications Array
+    const notificationsToSend = [];
+
+    // Notify Next Team (Action Needed)
+    if (newStatus === 'Picked Up' || newStatus === 'Handed to Ops') {
+      notificationsToSend.push({
         role_target: 'Operations',
-        title: 'Shipment Arriving at Ops',
-        message: `AWB ${shipment.awb_number} has been picked up by RFS.`,
+        title: `Action Needed: Shipment ${newStatus}`,
+        message: `AWB ${shipment.awb_number} was updated by ${actionBy} (${userRole}).`,
         shipment_awb: shipment.awb_number
-      }]);
-    } else if (newStatus === 'Handed to Ops') {
-      await supabase.from('notifications').insert([{
-        role_target: 'Operations',
-        title: 'Shipment Handed to Ops',
-        message: `AWB ${shipment.awb_number} has been handed over for export formalities.`,
-        shipment_awb: shipment.awb_number
-      }]);
-    } else if (newStatus === 'Export Cleared' || newStatus === 'Handed to Airline') {
-      await supabase.from('notifications').insert([{
+      });
+    }
+
+    // Always Notify Customer Service of updates made by RFS/Ops (So they can update the client)
+    if (userRole !== 'Customer Service') {
+      notificationsToSend.push({
         role_target: 'Customer Service',
-        title: 'Shipment Progress Update',
-        message: `AWB ${shipment.awb_number} status changed to: ${newStatus}.`,
+        title: 'Shipment Status Updated',
+        message: `${userRole} (${actionBy}) changed AWB ${shipment.awb_number} to: ${newStatus}.`,
         shipment_awb: shipment.awb_number
-      }]);
+      });
+    }
+
+    // Notify Finance when delivered
+    if (newStatus === 'Delivered') {
+      notificationsToSend.push({
+        role_target: 'Finance',
+        title: 'Shipment Delivered',
+        message: `AWB ${shipment.awb_number} was marked as Delivered by ${actionBy}.`,
+        shipment_awb: shipment.awb_number
+      });
+    }
+
+    // Send all notifications in one efficient database call
+    if (notificationsToSend.length > 0) {
+      await supabase.from('notifications').insert(notificationsToSend);
     }
 
     setNewStatus('');
@@ -389,7 +414,7 @@ export default function ShipmentDetails() {
         {/* RIGHT COLUMN */}
         <div className="space-y-6">
           
-          {/* TIMELINE (Fixed classes: h-112.5 and before:bg-linear-to-b) */}
+          {/* TIMELINE */}
           <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60 h-112.5 overflow-y-auto">
             <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2"><Clock size={20} className="text-indigo-500"/> Timeline</h2>
             <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-linear-to-b before:from-transparent before:via-slate-200 before:to-transparent">
@@ -412,7 +437,7 @@ export default function ShipmentDetails() {
             </div>
           </div>
 
-          {/* COMMENTS (Fixed class: h-112.5) */}
+          {/* COMMENTS */}
           <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60 flex flex-col h-112.5">
             <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2"><MessageSquare size={20} className="text-indigo-500"/> Team Comments</h2>
             
