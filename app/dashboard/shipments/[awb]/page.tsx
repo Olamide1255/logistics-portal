@@ -8,7 +8,10 @@ import Link from 'next/link';
 export default function ShipmentDetails() {
   const params = useParams();
   const router = useRouter();
-  const awb = params.awb as string;
+  
+  // Decode the URL parameter (converts %20 to a space) and trim any extra spaces
+  const rawAwb = params.awb as string;
+  const awb = decodeURIComponent(rawAwb).trim();
 
   const [shipment, setShipment] = useState<any>(null);
   const [timeline, setTimeline] = useState<any[]>([]);
@@ -46,11 +49,11 @@ export default function ShipmentDetails() {
       setUserRole(role);
     }
 
-    // Get Shipment
+    // Get Shipment (using .ilike for case-insensitive matching)
     const { data: shipData, error } = await supabase
       .from('shipments')
       .select(`*, clients (client_name)`)
-      .eq('awb_number', awb)
+      .ilike('awb_number', awb) // <-- ILIKE handles case sensitivity
       .single();
     
     if (error) {
@@ -223,42 +226,42 @@ export default function ShipmentDetails() {
     await fetchData();
   };
 
-  if (loading) return <div className="p-10 text-center text-gray-500">Loading shipment details...</div>;
-  if (!shipment) return <div className="p-10 text-center text-red-500">Shipment not found.</div>;
+  if (loading) return <div className="p-10 text-center text-slate-500 animate-pulse">Loading shipment details...</div>;
+  if (!shipment) return <div className="p-10 text-center text-red-500 font-bold">Shipment not found.</div>;
 
   // Determine if user can edit/delete (Only Admin and CS)
   const canEditOrDelete = userRole === 'Super Admin' || userRole === 'Customer Service';
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       
       {/* HEADER */}
       <div className="flex justify-between items-center mb-2">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard/shipments" className="text-gray-500 hover:text-gray-800">
-            <ArrowLeft size={24} />
+          <Link href="/dashboard/shipments" className="text-slate-400 hover:text-slate-800 transition-colors p-2 hover:bg-slate-100 rounded-lg">
+            <ArrowLeft size={20} />
           </Link>
-          <h1 className="text-2xl font-bold text-gray-800">Back to Shipments</h1>
+          <h1 className="text-sm font-semibold text-slate-500 uppercase tracking-widest hidden md:block">Back to Shipments</h1>
         </div>
         
-        {/* EDIT / DELETE BUTTONS (Role Restricted) */}
+        {/* EDIT / DELETE BUTTONS */}
         {canEditOrDelete && (
           <>
             {!isEditing ? (
               <div className="flex gap-2">
-                <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 transition">
+                <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm">
                   <Edit size={16} /> Edit
                 </button>
-                <button onClick={handleDelete} disabled={isSubmitting} className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded hover:bg-red-100 transition">
+                <button onClick={handleDelete} disabled={isSubmitting} className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 px-4 py-2 rounded-xl hover:bg-red-100 transition-colors shadow-sm font-medium text-sm">
                   <Trash2 size={16} /> Delete
                 </button>
               </div>
             ) : (
               <div className="flex gap-2">
-                <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 transition">
+                <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm">
                   <X size={16} /> Cancel
                 </button>
-                <button onClick={handleSaveEdit} disabled={isSubmitting} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+                <button onClick={handleSaveEdit} disabled={isSubmitting} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-600/20 font-medium text-sm">
                   <Save size={16} /> {isSubmitting ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
@@ -267,17 +270,18 @@ export default function ShipmentDetails() {
         )}
       </div>
 
-      <div className="bg-white p-6 rounded-lg shadow border border-gray-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm ring-1 ring-slate-200/60 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">AWB: {shipment.awb_number}</h1>
-          <p className="text-gray-500 text-lg mt-1">Client: <span className="font-semibold text-gray-800">{shipment.clients?.client_name}</span></p>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">AWB: {shipment.awb_number}</h1>
+          <p className="text-slate-500 text-lg mt-1 font-medium">Client: <span className="font-bold text-slate-800">{shipment.clients?.client_name}</span></p>
         </div>
-        <div className="text-left md:text-right space-y-2">
-          <div className={`px-4 py-2 rounded-full font-bold text-sm inline-block ${shipment.payment_status === 'Approved' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}`}>
+        <div className="flex flex-row md:flex-col gap-2 md:items-end">
+          <div className={`px-4 py-2 rounded-xl font-bold text-sm inline-flex items-center gap-2 ring-1 ring-inset ${shipment.payment_status === 'Approved' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-amber-200'}`}>
+            <span className={`w-2 h-2 rounded-full ${shipment.payment_status === 'Approved' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
             Payment: {shipment.payment_status}
           </div>
-          <br/>
-          <div className="px-4 py-2 rounded-full font-bold text-sm inline-block bg-blue-100 text-blue-800">
+          <div className="px-4 py-2 rounded-xl font-bold text-sm inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200">
+            <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
             Status: {shipment.current_status}
           </div>
         </div>
@@ -288,29 +292,29 @@ export default function ShipmentDetails() {
         {/* LEFT COLUMN */}
         <div className="lg:col-span-2 space-y-6">
           
-          <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-            <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Shipment Details</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
+            <h2 className="text-lg font-bold text-slate-900 mb-6 border-b border-slate-100 pb-4">Shipment Details</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
               {isEditing && canEditOrDelete ? (
                 <>
-                  <div><label className="text-gray-500 block mb-1">Sender</label> <input name="sender_details" value={editFormData.sender_details || ''} onChange={handleEditChange} className="w-full border p-2 rounded text-gray-900" /></div>
-                  <div><label className="text-gray-500 block mb-1">Receiver</label> <input name="receiver_details" value={editFormData.receiver_details || ''} onChange={handleEditChange} className="w-full border p-2 rounded text-gray-900" /></div>
-                  <div><label className="text-gray-500 block mb-1">Origin</label> <input name="origin" value={editFormData.origin || ''} onChange={handleEditChange} className="w-full border p-2 rounded text-gray-900" /></div>
-                  <div><label className="text-gray-500 block mb-1">Destination</label> <input name="destination" value={editFormData.destination || ''} onChange={handleEditChange} className="w-full border p-2 rounded text-gray-900" /></div>
-                  <div><label className="text-gray-500 block mb-1">Commodity</label> <input name="commodity_type" value={editFormData.commodity_type || ''} onChange={handleEditChange} className="w-full border p-2 rounded text-gray-900" /></div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div><label className="text-gray-500 block mb-1">Weight (kg)</label> <input type="number" step="0.01" name="weight" value={editFormData.weight || ''} onChange={handleEditChange} className="w-full border p-2 rounded text-gray-900" /></div>
-                    <div><label className="text-gray-500 block mb-1">Dims</label> <input name="dimensions" value={editFormData.dimensions || ''} onChange={handleEditChange} className="w-full border p-2 rounded text-gray-900" /></div>
+                  <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Sender</label> <input name="sender_details" value={editFormData.sender_details || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" /></div>
+                  <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Receiver</label> <input name="receiver_details" value={editFormData.receiver_details || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" /></div>
+                  <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Origin</label> <input name="origin" value={editFormData.origin || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" /></div>
+                  <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Destination</label> <input name="destination" value={editFormData.destination || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" /></div>
+                  <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Commodity</label> <input name="commodity_type" value={editFormData.commodity_type || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" /></div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Weight (kg)</label> <input type="number" step="0.01" name="weight" value={editFormData.weight || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" /></div>
+                    <div><label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Dims</label> <input name="dimensions" value={editFormData.dimensions || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" /></div>
                   </div>
                 </>
               ) : (
                 <>
-                  <div><span className="text-gray-500 block">Sender</span> <span className="text-gray-900 font-medium">{shipment.sender_details}</span></div>
-                  <div><span className="text-gray-500 block">Receiver</span> <span className="text-gray-900 font-medium">{shipment.receiver_details}</span></div>
-                  <div><span className="text-gray-500 block">Origin</span> <span className="text-gray-900 font-medium">{shipment.origin}</span></div>
-                  <div><span className="text-gray-500 block">Destination</span> <span className="text-gray-900 font-medium">{shipment.destination}</span></div>
-                  <div><span className="text-gray-500 block">Commodity</span> <span className="text-gray-900 font-medium">{shipment.commodity_type}</span></div>
-                  <div><span className="text-gray-500 block">Weight / Dims</span> <span className="text-gray-900 font-medium">{shipment.weight} kg / {shipment.dimensions}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Sender</span> <span className="text-slate-900 font-semibold">{shipment.sender_details}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Receiver</span> <span className="text-slate-900 font-semibold">{shipment.receiver_details}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Origin</span> <span className="text-slate-900 font-semibold">{shipment.origin}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Destination</span> <span className="text-slate-900 font-semibold">{shipment.destination}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Commodity</span> <span className="text-slate-900 font-semibold">{shipment.commodity_type}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Weight / Dims</span> <span className="text-slate-900 font-semibold">{shipment.weight} kg / {shipment.dimensions}</span></div>
                 </>
               )}
             </div>
@@ -318,35 +322,35 @@ export default function ShipmentDetails() {
 
           {/* ACTION PANEL */}
           {!isEditing && (
-            <div className="bg-gray-50 p-6 rounded-lg shadow border border-gray-200">
-              <h2 className="text-xl font-bold text-gray-800 mb-4">Action Panel</h2>
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-inner">
+              <h2 className="text-lg font-bold text-slate-900 mb-4">Action Panel</h2>
               
-              <div className="mb-4">
-                <label className="block text-sm font-bold text-gray-700 mb-1">Action By (Your Name / Dept) *</label>
+              <div className="mb-6">
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Action By (Your Name / Dept) *</label>
                 <input 
                   type="text" 
                   placeholder="e.g. John Doe" 
                   value={actionBy} 
                   onChange={e => setActionBy(e.target.value)}
-                  className="w-full border p-2 rounded text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium shadow-sm"
                 />
               </div>
 
-              {/* FINANCE APPROVAL BUTTON (Role Restricted) */}
+              {/* FINANCE APPROVAL BUTTON */}
               {shipment.payment_status === 'Pending' && (userRole === 'Finance' || userRole === 'Super Admin') && (
-                <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded">
-                  <p className="text-orange-800 font-semibold mb-2">Awaiting Finance Approval</p>
-                  <button onClick={handleApprovePayment} disabled={isSubmitting} className="bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-700 flex items-center gap-2 transition">
+                <div className="mb-6 p-4 bg-white border border-amber-200 rounded-xl shadow-sm">
+                  <p className="text-amber-700 font-bold mb-3 flex items-center gap-2"><Clock size={18}/> Awaiting Finance Approval</p>
+                  <button onClick={handleApprovePayment} disabled={isSubmitting} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-emerald-700 flex items-center gap-2 transition-all shadow-md shadow-emerald-600/20">
                     <CheckCircle size={18} /> {isSubmitting ? 'Processing...' : 'Approve Payment & Release'}
                   </button>
                 </div>
               )}
 
-              {/* STATUS UPDATE FORM (Role Restricted Options) */}
+              {/* STATUS UPDATE FORM */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">New Status</label>
-                  <select value={newStatus} onChange={e => setNewStatus(e.target.value)} className="w-full border p-2 rounded text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500">
+                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">New Status</label>
+                  <select value={newStatus} onChange={e => setNewStatus(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium shadow-sm">
                     <option value="">Select Status...</option>
                     
                     {(userRole === 'RFS' || userRole === 'Super Admin') && (
@@ -370,11 +374,11 @@ export default function ShipmentDetails() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">Additional Notes</label>
-                  <input type="text" placeholder="Optional details..." value={statusNotes} onChange={e => setStatusNotes(e.target.value)} className="w-full border p-2 rounded text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500" />
+                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Additional Notes</label>
+                  <input type="text" placeholder="Optional details..." value={statusNotes} onChange={e => setStatusNotes(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium shadow-sm" />
                 </div>
               </div>
-              <button onClick={handleUpdateStatus} disabled={isSubmitting} className="mt-4 bg-blue-600 text-white px-6 py-2 rounded font-bold hover:bg-blue-700 transition">
+              <button onClick={handleUpdateStatus} disabled={isSubmitting} className="mt-4 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-600/20">
                 {isSubmitting ? 'Updating...' : 'Update Status'}
               </button>
             </div>
@@ -385,51 +389,51 @@ export default function ShipmentDetails() {
         {/* RIGHT COLUMN */}
         <div className="space-y-6">
           
-          <div className="bg-white p-6 rounded-lg shadow border border-gray-200 h-96 overflow-y-auto">
-            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><Clock size={20}/> Timeline</h2>
-            <div className="space-y-4 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-gray-200 before:to-transparent">
-              {timeline.length === 0 && <p className="text-gray-500 text-sm">No updates yet.</p>}
+          <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60 h-[450px] overflow-y-auto">
+            <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2"><Clock size={20} className="text-indigo-500"/> Timeline</h2>
+            <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-slate-200 before:to-transparent">
+              {timeline.length === 0 && <p className="text-slate-500 text-sm italic">No updates yet.</p>}
               {timeline.map((item, i) => (
                 <div key={i} className="relative flex items-center justify-between md:justify-normal group is-active">
-                  <div className="flex items-center justify-center w-6 h-6 rounded-full border-2 border-white bg-blue-500 text-white shadow shrink-0 z-10 text-xs">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full border-4 border-white bg-indigo-500 text-white shadow shrink-0 z-10 text-xs">
                     ✓
                   </div>
-                  <div className="w-[calc(100%-2rem)] bg-gray-50 p-3 rounded border border-gray-100 shadow-sm ml-4">
+                  <div className="w-[calc(100%-3rem)] bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm ml-4">
                     <div className="flex items-center justify-between space-x-2 mb-1">
-                      <div className="font-bold text-gray-800 text-sm">{item.status_dropdown}</div>
-                      <time className="text-xs text-gray-500">{new Date(item.created_at).toLocaleDateString()}</time>
+                      <div className="font-bold text-slate-900 text-sm">{item.status_dropdown}</div>
+                      <time className="text-[10px] font-semibold text-slate-400 uppercase">{new Date(item.created_at).toLocaleDateString()}</time>
                     </div>
-                    <div className="text-sm text-gray-600">{item.status_notes}</div>
-                    <div className="text-xs text-blue-600 mt-2 font-medium">By: {item.action_by_name}</div>
+                    <div className="text-sm text-slate-600 leading-relaxed">{item.status_notes}</div>
+                    <div className="text-xs text-indigo-600 mt-2 font-bold bg-indigo-50 px-2 py-1 rounded-md inline-block">By: {item.action_by_name}</div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow border border-gray-200 flex flex-col h-96">
-            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2"><MessageSquare size={20}/> Team Comments</h2>
+          <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60 flex flex-col h-[450px]">
+            <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2"><MessageSquare size={20} className="text-indigo-500"/> Team Comments</h2>
             
-            <div className="flex-1 overflow-y-auto space-y-3 mb-4 pr-2">
-              {comments.length === 0 && <p className="text-gray-500 text-sm">No comments yet.</p>}
+            <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
+              {comments.length === 0 && <p className="text-slate-500 text-sm italic">No comments yet.</p>}
               {comments.map((c, i) => (
-                <div key={i} className="bg-gray-50 p-3 rounded text-sm border border-gray-100">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="font-bold text-gray-800">{c.action_by_name}</span>
-                    <span className="text-xs text-gray-500">{new Date(c.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                <div key={i} className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-bold text-slate-800 text-sm">{c.action_by_name}</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">{new Date(c.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                   </div>
-                  <p className="text-gray-700">{c.comment_text}</p>
+                  <p className="text-sm text-slate-700 leading-relaxed">{c.comment_text}</p>
                 </div>
               ))}
             </div>
 
-            <form onSubmit={handleAddComment} className="mt-auto space-y-2">
+            <form onSubmit={handleAddComment} className="mt-auto space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
               <input 
                 type="text" 
                 placeholder="Your Name..." 
                 value={commentBy} 
                 onChange={e => setCommentBy(e.target.value)}
-                className="w-full border p-2 rounded text-gray-900 bg-white text-sm focus:ring-blue-500 focus:border-blue-500" 
+                className="w-full border border-slate-200 p-2 rounded-lg text-slate-900 bg-white text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                 required
               />
               <div className="flex gap-2">
@@ -438,10 +442,10 @@ export default function ShipmentDetails() {
                   placeholder="Type a comment..." 
                   value={newComment} 
                   onChange={e => setNewComment(e.target.value)}
-                  className="w-full border p-2 rounded text-gray-900 bg-white text-sm focus:ring-blue-500 focus:border-blue-500" 
+                  className="w-full border border-slate-200 p-2 rounded-lg text-slate-900 bg-white text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" 
                   required
                 />
-                <button type="submit" className="bg-gray-800 text-white p-2 rounded hover:bg-gray-900 transition">
+                <button type="submit" className="bg-slate-900 text-white p-2 rounded-lg hover:bg-slate-800 transition-colors shadow-sm">
                   <Send size={18} />
                 </button>
               </div>
