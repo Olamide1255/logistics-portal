@@ -2,8 +2,10 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams, useRouter } from 'next/navigation';
-import { CheckCircle, Clock, MessageSquare, Send, ArrowLeft, Edit, Trash2, Save, X } from 'lucide-react';
+import { CheckCircle, Clock, MessageSquare, Send, ArrowLeft, Edit, Trash2, Save, X, WifiOff } from 'lucide-react';
 import Link from 'next/link';
+import { queueAction, processQueue } from '@/lib/offlineSync';
+import { toast } from 'sonner';
 
 export default function ShipmentDetails() {
   const params = useParams();
@@ -17,6 +19,9 @@ export default function ShipmentDetails() {
   const [comments, setComments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>('');
+  
+  // Offline State
+  const [isOnline, setIsOnline] = useState(true);
 
   // Edit State
   const [isEditing, setIsEditing] = useState(false);
@@ -35,6 +40,10 @@ export default function ShipmentDetails() {
   const fetchData = async () => {
     setLoading(true);
     
+    // Check network status
+    setIsOnline(navigator.onLine);
+    if (navigator.onLine) processQueue(); // Try to sync any pending items on load
+
     const { data: { user } } = await supabase.auth.getUser();
     if (user?.email) {
       const prefix = user.email.split('@')[0].toLowerCase();
@@ -82,24 +91,44 @@ export default function ShipmentDetails() {
 
   useEffect(() => {
     if (awb) fetchData();
+    
+    // Setup network listeners
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, [awb]);
 
   // --- REALTIME SYNCHRONIZATION ---
   useEffect(() => {
     if (!shipment?.id) return;
 
-    // Subscribe to changes specific to this shipment
     const channel = supabase
       .channel(`shipment_${shipment.id}`)
-      // 1. Listen for new comments
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shipment_comments', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
-        setComments((prev) => [...prev, payload.new]);
+        // Only add if it's not already there (Optimistic UI check)
+        setComments((prev) => {
+          if (prev.some(c => c.id === payload.new.id || c.isOptimistic)) {
+            // Replace the optimistic comment with the real one
+            return prev.map(c => c.isOptimistic ? payload.new : c).filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+          }
+          return [...prev, payload.new];
+        });
       })
-      // 2. Listen for new timeline entries
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shipment_timeline', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
-        setTimeline((prev) => [payload.new, ...prev]);
+        setTimeline((prev) => {
+          if (prev.some(t => t.id === payload.new.id || t.isOptimistic)) {
+             return prev.map(t => t.isOptimistic ? payload.new : t).filter((v, i, a) => a.findIndex(x => x.id === v.id) === i);
+          }
+          return [payload.new, ...prev];
+        });
       })
-      // 3. Listen for status / payment updates on the shipment itself
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'shipments', filter: `id=eq.${shipment.id}` }, (payload) => {
         setShipment((prev: any) => ({ ...prev, ...payload.new }));
       })
@@ -110,32 +139,152 @@ export default function ShipmentDetails() {
     };
   }, [shipment?.id]);
 
-  // --- DELETE FUNCTION ---
-  const handleDelete = async () => {
-    const confirmDelete = window.confirm(`Are you sure you want to permanently delete shipment ${awb}? This action cannot be undone.`);
-    if (!confirmDelete) return;
-    
+  // --- OFFLINE RESILIENT ACTION HANDLER ---
+  const handleUpdateStatus = async () => {
+    if (!newStatus) return alert('Please select a status.');
+    if (!actionBy) return alert('Please enter your name in the "Action By" field.');
     setIsSubmitting(true);
-    const { error } = await supabase.from('shipments').delete().eq('id', shipment.id);
+
+    // 1. OPTIMISTIC UI UPDATE (Instant feedback)
+    const optimisticTimeline = {
+      id: `temp-${Date.now()}`,
+      shipment_id: shipment.id,
+      status_dropdown: newStatus,
+      status_notes: statusNotes,
+      updated_by_role: userRole,
+      action_by_name: actionBy,
+      created_at: new Date().toISOString(),
+      isOptimistic: true
+    };
+    setTimeline(prev => [optimisticTimeline, ...prev]);
+    setShipment((prev: any) => ({ ...prev, current_status: newStatus }));
     
-    if (error) {
-      alert("Error deleting shipment: " + error.message);
+    const previousStatus = newStatus;
+    const previousNotes = statusNotes;
+    const previousActionBy = actionBy;
+
+    setNewStatus('');
+    setStatusNotes('');
+    setActionBy('');
+
+    // 2. SEND TO DATABASE IN BACKGROUND
+    try {
+      if (!navigator.onLine) throw new Error("Offline");
+
+      const { error: statusError } = await supabase.from('shipments').update({ current_status: previousStatus }).eq('id', shipment.id);
+      if (statusError) throw statusError;
+
+      const { error: timelineError } = await supabase.from('shipment_timeline').insert([{
+        shipment_id: shipment.id,
+        status_dropdown: previousStatus,
+        status_notes: previousNotes,
+        updated_by_role: userRole, 
+        action_by_name: previousActionBy
+      }]);
+      if (timelineError) throw timelineError;
+
+      // Send Notifications
+      const notificationsToSend = [];
+      if (previousStatus === 'Picked Up' || previousStatus === 'Handed to Ops') {
+        notificationsToSend.push({
+          role_target: 'Operations',
+          title: `Action Needed: Shipment ${previousStatus}`,
+          message: `AWB ${shipment.awb_number} was updated by ${previousActionBy} (${userRole}).`,
+          shipment_awb: shipment.awb_number
+        });
+      }
+      if (userRole !== 'Customer Service') {
+        notificationsToSend.push({
+          role_target: 'Customer Service',
+          title: 'Shipment Status Updated',
+          message: `${userRole} (${previousActionBy}) changed AWB ${shipment.awb_number} to: ${previousStatus}.`,
+          shipment_awb: shipment.awb_number
+        });
+      }
+      if (notificationsToSend.length > 0) await supabase.from('notifications').insert(notificationsToSend);
+
+    } catch (error) {
+      console.warn("Network unstable. Queuing status update...");
+      // Queue for later
+      queueAction('shipments', 'UPDATE', { id: shipment.id, data: { current_status: previousStatus } });
+      queueAction('shipment_timeline', 'INSERT', {
+        shipment_id: shipment.id,
+        status_dropdown: previousStatus,
+        status_notes: previousNotes,
+        updated_by_role: userRole, 
+        action_by_name: previousActionBy
+      });
+      toast.warning("Offline: Status update saved locally and will sync when online.");
+    } finally {
       setIsSubmitting(false);
-    } else {
-      router.push('/dashboard/shipments');
     }
   };
 
-  // --- EDIT FUNCTIONS ---
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment || !commentBy) return;
+
+    // 1. OPTIMISTIC UI UPDATE
+    const optimisticComment = {
+      id: `temp-${Date.now()}`,
+      shipment_id: shipment.id,
+      comment_text: newComment,
+      updated_by_role: userRole,
+      action_by_name: commentBy,
+      created_at: new Date().toISOString(),
+      isOptimistic: true
+    };
+    
+    setComments(prev => [...prev, optimisticComment]);
+    
+    const savedComment = newComment;
+    const savedCommentBy = commentBy;
+    setNewComment('');
+
+    // 2. SEND TO DATABASE IN BACKGROUND
+    try {
+      if (!navigator.onLine) throw new Error("Offline");
+      
+      const { error } = await supabase.from('shipment_comments').insert([{
+        shipment_id: shipment.id,
+        comment_text: savedComment,
+        updated_by_role: userRole,
+        action_by_name: savedCommentBy
+      }]);
+      if (error) throw error;
+
+    } catch (error) {
+      console.warn("Network unstable. Queuing comment...");
+      queueAction('shipment_comments', 'INSERT', {
+        shipment_id: shipment.id,
+        comment_text: savedComment,
+        updated_by_role: userRole,
+        action_by_name: savedCommentBy
+      });
+      toast.warning("Offline: Comment saved locally.");
+    }
+  };
+
+  // --- OTHER FUNCTIONS (Keep as is) ---
+  const handleDelete = async () => {
+    const confirmDelete = window.confirm(`Are you sure you want to permanently delete shipment ${awb}?`);
+    if (!confirmDelete) return;
+    setIsSubmitting(true);
+    const { error } = await supabase.from('shipments').delete().eq('id', shipment.id);
+    if (error) alert("Error deleting: " + error.message);
+    else router.push('/dashboard/shipments');
+    setIsSubmitting(false);
+  };
+
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setEditFormData({ ...editFormData, [e.target.name]: e.target.value });
   };
 
   const handleSaveEdit = async () => {
     setIsSubmitting(true);
-    const { error } = await supabase
-      .from('shipments')
-      .update({
+    try {
+      if (!navigator.onLine) throw new Error("Offline");
+      const { error } = await supabase.from('shipments').update({
         sender_details: editFormData.sender_details,
         receiver_details: editFormData.receiver_details,
         weight: parseFloat(editFormData.weight),
@@ -143,127 +292,46 @@ export default function ShipmentDetails() {
         origin: editFormData.origin,
         destination: editFormData.destination,
         commodity_type: editFormData.commodity_type,
-      })
-      .eq('id', shipment.id);
-
-    if (error) {
-      alert("Error saving changes: " + error.message);
-    } else {
+      }).eq('id', shipment.id);
+      if (error) throw error;
+      
       await supabase.from('shipment_timeline').insert([{
         shipment_id: shipment.id,
         status_dropdown: 'Details Edited',
-        status_notes: 'Shipment information was manually corrected/updated.',
+        status_notes: 'Shipment information corrected.',
         updated_by_role: userRole,
         action_by_name: actionBy || userRole
       }]);
-      
       setIsEditing(false);
-      // No need to fetchData(), Realtime will update the state!
+    } catch (error) {
+       alert("You must be online to edit shipment details. Please try again when connected.");
     }
     setIsSubmitting(false);
   };
 
-  // --- STATUS & COMMENT FUNCTIONS ---
   const handleApprovePayment = async () => {
     if (!actionBy) return alert('Please enter your name in the "Action By" field first.');
     setIsSubmitting(true);
-    
-    await supabase.from('shipments').update({ payment_status: 'Approved' }).eq('id', shipment.id);
-    await supabase.from('shipment_timeline').insert([{
-      shipment_id: shipment.id,
-      status_dropdown: 'Finance Approved',
-      status_notes: 'Payment confirmed and shipment released to next stage.',
-      updated_by_role: userRole,
-      action_by_name: actionBy
-    }]);
-
-    await supabase.from('notifications').insert([
-      {
-        role_target: 'RFS',
-        title: 'Action Needed: Shipment Ready for Pickup',
-        message: `AWB ${shipment.awb_number} was approved by ${actionBy}. Ready for pickup.`,
-        shipment_awb: shipment.awb_number
-      },
-      {
-        role_target: 'Customer Service',
-        title: 'Payment Approved',
-        message: `Finance (${actionBy}) approved payment for AWB ${shipment.awb_number}.`,
-        shipment_awb: shipment.awb_number
-      }
-    ]);
-
-    setActionBy('');
+    try {
+      if (!navigator.onLine) throw new Error("Offline");
+      
+      await supabase.from('shipments').update({ payment_status: 'Approved' }).eq('id', shipment.id);
+      await supabase.from('shipment_timeline').insert([{
+        shipment_id: shipment.id,
+        status_dropdown: 'Finance Approved',
+        status_notes: 'Payment confirmed.',
+        updated_by_role: userRole,
+        action_by_name: actionBy
+      }]);
+      await supabase.from('notifications').insert([
+        { role_target: 'RFS', title: 'Shipment Ready for Pickup', message: `AWB ${shipment.awb_number} was approved by ${actionBy}.`, shipment_awb: shipment.awb_number },
+        { role_target: 'Customer Service', title: 'Payment Approved', message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}.`, shipment_awb: shipment.awb_number }
+      ]);
+      setActionBy('');
+    } catch (error) {
+      alert("You must be online to approve payments.");
+    }
     setIsSubmitting(false);
-    // Realtime will update the UI instantly
-  };
-
-  const handleUpdateStatus = async () => {
-    if (!newStatus) return alert('Please select a status.');
-    if (!actionBy) return alert('Please enter your name in the "Action By" field.');
-    setIsSubmitting(true);
-
-    await supabase.from('shipments').update({ current_status: newStatus }).eq('id', shipment.id);
-    await supabase.from('shipment_timeline').insert([{
-      shipment_id: shipment.id,
-      status_dropdown: newStatus,
-      status_notes: statusNotes,
-      updated_by_role: userRole, 
-      action_by_name: actionBy
-    }]);
-
-    const notificationsToSend = [];
-
-    if (newStatus === 'Picked Up' || newStatus === 'Handed to Ops') {
-      notificationsToSend.push({
-        role_target: 'Operations',
-        title: `Action Needed: Shipment ${newStatus}`,
-        message: `AWB ${shipment.awb_number} was updated by ${actionBy} (${userRole}).`,
-        shipment_awb: shipment.awb_number
-      });
-    }
-
-    if (userRole !== 'Customer Service') {
-      notificationsToSend.push({
-        role_target: 'Customer Service',
-        title: 'Shipment Status Updated',
-        message: `${userRole} (${actionBy}) changed AWB ${shipment.awb_number} to: ${newStatus}.`,
-        shipment_awb: shipment.awb_number
-      });
-    }
-
-    if (newStatus === 'Delivered') {
-      notificationsToSend.push({
-        role_target: 'Finance',
-        title: 'Shipment Delivered',
-        message: `AWB ${shipment.awb_number} was marked as Delivered by ${actionBy}.`,
-        shipment_awb: shipment.awb_number
-      });
-    }
-
-    if (notificationsToSend.length > 0) {
-      await supabase.from('notifications').insert(notificationsToSend);
-    }
-
-    setNewStatus('');
-    setStatusNotes('');
-    setActionBy('');
-    setIsSubmitting(false);
-    // Realtime will update the UI instantly
-  };
-
-  const handleAddComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newComment || !commentBy) return alert('Please enter your name and a comment.');
-
-    await supabase.from('shipment_comments').insert([{
-      shipment_id: shipment.id,
-      comment_text: newComment,
-      updated_by_role: userRole,
-      action_by_name: commentBy
-    }]);
-
-    setNewComment('');
-    // Realtime will update the UI instantly
   };
 
   if (loading) return <div className="p-10 text-center text-slate-500 animate-pulse">Loading shipment details...</div>;
@@ -274,6 +342,14 @@ export default function ShipmentDetails() {
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       
+      {/* OFFLINE BANNER */}
+      {!isOnline && (
+        <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-700 p-4 rounded-md flex items-center gap-3 shadow-sm">
+          <WifiOff size={20} />
+          <p className="font-medium text-sm">You are currently offline. Any comments or status updates will be saved and synced automatically when your connection returns.</p>
+        </div>
+      )}
+
       {/* HEADER */}
       <div className="flex justify-between items-center mb-2">
         <div className="flex items-center gap-4">
@@ -283,7 +359,6 @@ export default function ShipmentDetails() {
           <h1 className="text-sm font-semibold text-slate-500 uppercase tracking-widest hidden md:block">Back to Shipments</h1>
         </div>
         
-        {/* EDIT / DELETE BUTTONS */}
         {canEditOrDelete && (
           <>
             {!isEditing ? (
@@ -426,15 +501,14 @@ export default function ShipmentDetails() {
         {/* RIGHT COLUMN */}
         <div className="space-y-6">
           
-          {/* TIMELINE */}
           <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60 h-112.5 overflow-y-auto">
             <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2"><Clock size={20} className="text-indigo-500"/> Timeline</h2>
             <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-linear-to-b before:from-transparent before:via-slate-200 before:to-transparent">
               {timeline.length === 0 && <p className="text-slate-500 text-sm italic">No updates yet.</p>}
               {timeline.map((item, i) => (
-                <div key={i} className="relative flex items-center justify-between md:justify-normal group is-active">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full border-4 border-white bg-indigo-500 text-white shadow shrink-0 z-10 text-xs">
-                    ✓
+                <div key={item.id || i} className={`relative flex items-center justify-between md:justify-normal group is-active ${item.isOptimistic ? 'opacity-60' : ''}`}>
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full border-4 border-white text-white shadow shrink-0 z-10 text-xs ${item.isOptimistic ? 'bg-slate-400' : 'bg-indigo-500'}`}>
+                    {item.isOptimistic ? '...' : '✓'}
                   </div>
                   <div className="w-[calc(100%-3rem)] bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm ml-4">
                     <div className="flex items-center justify-between space-x-2 mb-1">
@@ -449,17 +523,18 @@ export default function ShipmentDetails() {
             </div>
           </div>
 
-          {/* COMMENTS */}
           <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60 flex flex-col h-112.5">
             <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2"><MessageSquare size={20} className="text-indigo-500"/> Team Comments</h2>
             
             <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
               {comments.length === 0 && <p className="text-slate-500 text-sm italic">No comments yet.</p>}
               {comments.map((c, i) => (
-                <div key={i} className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <div key={c.id || i} className={`bg-slate-50 p-4 rounded-xl border border-slate-100 ${c.isOptimistic ? 'opacity-60' : ''}`}>
                   <div className="flex justify-between items-center mb-2">
                     <span className="font-bold text-slate-800 text-sm">{c.action_by_name}</span>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase">{new Date(c.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase">
+                      {c.isOptimistic ? 'Sending...' : new Date(c.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </span>
                   </div>
                   <p className="text-sm text-slate-700 leading-relaxed">{c.comment_text}</p>
                 </div>

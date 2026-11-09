@@ -5,8 +5,9 @@ import { Suspense, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Package, PlusCircle, LogOut, LayoutDashboard, Menu, X, Bell, BellRing, Users } from 'lucide-react';
+import { Package, PlusCircle, LogOut, LayoutDashboard, Menu, X, Bell, BellRing, Users, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
+import { processQueue } from '@/lib/offlineSync';
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<string>('Loading...');
@@ -14,6 +15,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
   
   const [pushEnabled, setPushEnabled] = useState<boolean>(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -25,6 +27,60 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname(); 
 
+  // --- NETWORK & VERSION POLLING ---
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      processQueue(); // Sync offline data when connection returns
+      toast.success("Connection restored. Syncing data...");
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast.error("You are offline. Changes will be saved locally.");
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Check for app updates every 5 minutes
+    let currentVersion = '';
+    
+    const checkVersion = async () => {
+      try {
+        const res = await fetch('/api/version');
+        const data = await res.json();
+        
+        if (!currentVersion) {
+          currentVersion = data.version;
+        } else if (currentVersion !== data.version) {
+          // New version detected!
+          toast.info("New Update Available", {
+            description: "A new version of the portal has been deployed.",
+            duration: Infinity,
+            action: {
+              label: 'Update Now',
+              onClick: () => window.location.reload()
+            }
+          });
+        }
+      } catch (e) {
+        // Ignore fetch errors (user might be offline)
+      }
+    };
+
+    checkVersion();
+    const versionInterval = setInterval(checkVersion, 5 * 60 * 1000); // 5 minutes
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      clearInterval(versionInterval);
+    };
+  }, []);
+
+  // --- AUTH & REALTIME NOTIFICATIONS ---
   useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -199,7 +255,15 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-3">
-            {!pushEnabled && (
+            
+            {/* OFFLINE INDICATOR */}
+            {!isOnline && (
+              <div className="flex items-center gap-2 bg-red-50 text-red-600 px-3 py-1.5 rounded-xl text-sm font-semibold border border-red-200 animate-pulse">
+                <WifiOff size={16} /> Offline Mode
+              </div>
+            )}
+
+            {!pushEnabled && isOnline && (
               <button 
                 onClick={requestPushPermission}
                 className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-md shadow-indigo-600/20 hover:bg-indigo-700 transition-all duration-200"
