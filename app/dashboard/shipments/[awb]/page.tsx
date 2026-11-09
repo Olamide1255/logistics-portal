@@ -14,6 +14,7 @@ export default function ShipmentDetails() {
   const [timeline, setTimeline] = useState<any[]>([]);
   const [comments, setComments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string>('');
 
   // Edit State
   const [isEditing, setIsEditing] = useState(false);
@@ -31,6 +32,21 @@ export default function ShipmentDetails() {
 
   const fetchData = async () => {
     setLoading(true);
+    
+    // Get User Role
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.email) {
+      const prefix = user.email.split('@')[0].toLowerCase();
+      let role = 'Unknown';
+      if (prefix.includes('admin') || prefix.includes('it')) role = 'Super Admin';
+      else if (prefix.includes('finance')) role = 'Finance';
+      else if (prefix.includes('cs')) role = 'Customer Service';
+      else if (prefix.includes('rfs')) role = 'RFS';
+      else if (prefix.includes('ops')) role = 'Operations';
+      setUserRole(role);
+    }
+
+    // Get Shipment
     const { data: shipData, error } = await supabase
       .from('shipments')
       .select(`*, clients (client_name)`)
@@ -44,7 +60,7 @@ export default function ShipmentDetails() {
     }
 
     setShipment(shipData);
-    setEditFormData(shipData); // Pre-fill the edit form
+    setEditFormData(shipData);
 
     if (shipData) {
       const { data: timeData } = await supabase
@@ -107,13 +123,12 @@ export default function ShipmentDetails() {
     if (error) {
       alert("Error saving changes: " + error.message);
     } else {
-      // Log the edit in the timeline
       await supabase.from('shipment_timeline').insert([{
         shipment_id: shipment.id,
         status_dropdown: 'Details Edited',
         status_notes: 'Shipment information was manually corrected/updated.',
-        updated_by_role: 'System',
-        action_by_name: 'Admin/CS'
+        updated_by_role: userRole,
+        action_by_name: actionBy || userRole
       }]);
       
       setIsEditing(false);
@@ -126,14 +141,12 @@ export default function ShipmentDetails() {
   const handleApprovePayment = async () => {
     if (!actionBy) return alert('Please enter your name in the "Action By" field first.');
     setIsSubmitting(true);
-    
     await supabase.from('shipments').update({ payment_status: 'Approved' }).eq('id', shipment.id);
-    
     await supabase.from('shipment_timeline').insert([{
       shipment_id: shipment.id,
       status_dropdown: 'Finance Approved',
       status_notes: 'Payment confirmed and shipment released to next stage.',
-      updated_by_role: 'Finance',
+      updated_by_role: userRole,
       action_by_name: actionBy
     }]);
 
@@ -156,28 +169,34 @@ export default function ShipmentDetails() {
     setIsSubmitting(true);
 
     await supabase.from('shipments').update({ current_status: newStatus }).eq('id', shipment.id);
-    
     await supabase.from('shipment_timeline').insert([{
       shipment_id: shipment.id,
       status_dropdown: newStatus,
       status_notes: statusNotes,
-      updated_by_role: 'Team Member', 
+      updated_by_role: userRole, 
       action_by_name: actionBy
     }]);
 
-    // NOTIFY NEXT TEAM BASED ON STATUS
+    // NOTIFY NEXT TEAM
     if (newStatus === 'Picked Up') {
       await supabase.from('notifications').insert([{
         role_target: 'Operations',
         title: 'Shipment Arriving at Ops',
-        message: `AWB ${shipment.awb_number} has been picked up by RFS and is heading to Operations.`,
+        message: `AWB ${shipment.awb_number} has been picked up by RFS.`,
         shipment_awb: shipment.awb_number
       }]);
-    } else if (newStatus === 'Handed to Airline') {
+    } else if (newStatus === 'Handed to Ops') {
+      await supabase.from('notifications').insert([{
+        role_target: 'Operations',
+        title: 'Shipment Handed to Ops',
+        message: `AWB ${shipment.awb_number} has been handed over for export formalities.`,
+        shipment_awb: shipment.awb_number
+      }]);
+    } else if (newStatus === 'Export Cleared' || newStatus === 'Handed to Airline') {
       await supabase.from('notifications').insert([{
         role_target: 'Customer Service',
-        title: 'Shipment Handed to Airline',
-        message: `AWB ${shipment.awb_number} has successfully been handed over to the Airline.`,
+        title: 'Shipment Progress Update',
+        message: `AWB ${shipment.awb_number} status changed to: ${newStatus}.`,
         shipment_awb: shipment.awb_number
       }]);
     }
@@ -196,7 +215,7 @@ export default function ShipmentDetails() {
     await supabase.from('shipment_comments').insert([{
       shipment_id: shipment.id,
       comment_text: newComment,
-      updated_by_role: 'Team Member',
+      updated_by_role: userRole,
       action_by_name: commentBy
     }]);
 
@@ -206,6 +225,9 @@ export default function ShipmentDetails() {
 
   if (loading) return <div className="p-10 text-center text-gray-500">Loading shipment details...</div>;
   if (!shipment) return <div className="p-10 text-center text-red-500">Shipment not found.</div>;
+
+  // Determine if user can edit/delete (Only Admin and CS)
+  const canEditOrDelete = userRole === 'Super Admin' || userRole === 'Customer Service';
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -219,25 +241,29 @@ export default function ShipmentDetails() {
           <h1 className="text-2xl font-bold text-gray-800">Back to Shipments</h1>
         </div>
         
-        {/* EDIT / DELETE BUTTONS */}
-        {!isEditing ? (
-          <div className="flex gap-2">
-            <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 transition">
-              <Edit size={16} /> Edit
-            </button>
-            <button onClick={handleDelete} disabled={isSubmitting} className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded hover:bg-red-100 transition">
-              <Trash2 size={16} /> Delete
-            </button>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 transition">
-              <X size={16} /> Cancel
-            </button>
-            <button onClick={handleSaveEdit} disabled={isSubmitting} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
-              <Save size={16} /> {isSubmitting ? 'Saving...' : 'Save Changes'}
-            </button>
-          </div>
+        {/* EDIT / DELETE BUTTONS (Role Restricted) */}
+        {canEditOrDelete && (
+          <>
+            {!isEditing ? (
+              <div className="flex gap-2">
+                <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 transition">
+                  <Edit size={16} /> Edit
+                </button>
+                <button onClick={handleDelete} disabled={isSubmitting} className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded hover:bg-red-100 transition">
+                  <Trash2 size={16} /> Delete
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded hover:bg-gray-50 transition">
+                  <X size={16} /> Cancel
+                </button>
+                <button onClick={handleSaveEdit} disabled={isSubmitting} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+                  <Save size={16} /> {isSubmitting ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -259,15 +285,13 @@ export default function ShipmentDetails() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* LEFT COLUMN: Details & Actions */}
+        {/* LEFT COLUMN */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* DETAILS GRID (Now conditionally editable) */}
           <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
             <h2 className="text-xl font-bold text-gray-800 mb-4 border-b pb-2">Shipment Details</h2>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              {isEditing ? (
+              {isEditing && canEditOrDelete ? (
                 <>
                   <div><label className="text-gray-500 block mb-1">Sender</label> <input name="sender_details" value={editFormData.sender_details || ''} onChange={handleEditChange} className="w-full border p-2 rounded text-gray-900" /></div>
                   <div><label className="text-gray-500 block mb-1">Receiver</label> <input name="receiver_details" value={editFormData.receiver_details || ''} onChange={handleEditChange} className="w-full border p-2 rounded text-gray-900" /></div>
@@ -301,14 +325,15 @@ export default function ShipmentDetails() {
                 <label className="block text-sm font-bold text-gray-700 mb-1">Action By (Your Name / Dept) *</label>
                 <input 
                   type="text" 
-                  placeholder="e.g. John Doe (RFS)" 
+                  placeholder="e.g. John Doe" 
                   value={actionBy} 
                   onChange={e => setActionBy(e.target.value)}
                   className="w-full border p-2 rounded text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
-              {shipment.payment_status === 'Pending' && (
+              {/* FINANCE APPROVAL BUTTON (Role Restricted) */}
+              {shipment.payment_status === 'Pending' && (userRole === 'Finance' || userRole === 'Super Admin') && (
                 <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded">
                   <p className="text-orange-800 font-semibold mb-2">Awaiting Finance Approval</p>
                   <button onClick={handleApprovePayment} disabled={isSubmitting} className="bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-700 flex items-center gap-2 transition">
@@ -317,16 +342,31 @@ export default function ShipmentDetails() {
                 </div>
               )}
 
+              {/* STATUS UPDATE FORM (Role Restricted Options) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">New Status</label>
                   <select value={newStatus} onChange={e => setNewStatus(e.target.value)} className="w-full border p-2 rounded text-gray-900 bg-white focus:ring-blue-500 focus:border-blue-500">
                     <option value="">Select Status...</option>
-                    <option value="Picked Up">Picked Up (RFS)</option>
-                    <option value="Handed to Ops">Handed to Ops</option>
-                    <option value="Export Cleared">Export Cleared (Ops)</option>
-                    <option value="Handed to Airline">Handed to Airline</option>
-                    <option value="Delivered">Delivered</option>
+                    
+                    {(userRole === 'RFS' || userRole === 'Super Admin') && (
+                      <>
+                        <option value="Picked Up">Picked Up (RFS)</option>
+                        <option value="Handed to Ops">Handed to Ops</option>
+                        <option value="Delivered">Delivered (Local)</option>
+                      </>
+                    )}
+
+                    {(userRole === 'Operations' || userRole === 'Super Admin') && (
+                      <>
+                        <option value="Export Cleared">Export Cleared (Ops)</option>
+                        <option value="Handed to Airline">Handed to Airline</option>
+                      </>
+                    )}
+                    
+                    {userRole === 'Super Admin' && (
+                      <option value="Delivered">Mark as Delivered</option>
+                    )}
                   </select>
                 </div>
                 <div>
@@ -342,7 +382,7 @@ export default function ShipmentDetails() {
 
         </div>
 
-        {/* RIGHT COLUMN: Timeline & Comments */}
+        {/* RIGHT COLUMN */}
         <div className="space-y-6">
           
           <div className="bg-white p-6 rounded-lg shadow border border-gray-200 h-96 overflow-y-auto">
