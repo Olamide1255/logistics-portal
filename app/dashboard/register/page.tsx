@@ -98,7 +98,7 @@ export default function RegisterShipment() {
     }
   };
 
-  return (
+    return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Register New Shipment</h1>
@@ -114,11 +114,11 @@ export default function RegisterShipment() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">AWB Number *</label>
-            <input required name="awb_number" onChange={handleChange} className="w-full border p-2 rounded focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 123-45678901" />
+            <input required name="awb_number" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 123-45678901" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Client Name *</label>
-            <input required name="client_name" onChange={handleChange} className="w-full border p-2 rounded focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Acme Corp" />
+            <input required name="client_name" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Acme Corp" />
           </div>
         </div>
 
@@ -126,11 +126,11 @@ export default function RegisterShipment() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Sender Details *</label>
-            <input required name="sender_details" onChange={handleChange} className="w-full border p-2 rounded focus:ring-blue-500 focus:border-blue-500" placeholder="Name, Phone, Address" />
+            <input required name="sender_details" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="Name, Phone, Address" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Receiver Details *</label>
-            <input required name="receiver_details" onChange={handleChange} className="w-full border p-2 rounded focus:ring-blue-500 focus:border-blue-500" placeholder="Name, Phone, Address" />
+            <input required name="receiver_details" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="Name, Phone, Address" />
           </div>
         </div>
 
@@ -138,15 +138,15 @@ export default function RegisterShipment() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Origin *</label>
-            <input required name="origin" onChange={handleChange} className="w-full border p-2 rounded focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Lagos (LOS)" />
+            <input required name="origin" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Lagos (LOS)" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Destination *</label>
-            <input required name="destination" onChange={handleChange} className="w-full border p-2 rounded focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. London (LHR)" />
+            <input required name="destination" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. London (LHR)" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Commodity Type *</label>
-            <input required name="commodity_type" onChange={handleChange} className="w-full border p-2 rounded focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Electronics" />
+            <input required name="commodity_type" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Electronics" />
           </div>
         </div>
 
@@ -154,11 +154,11 @@ export default function RegisterShipment() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Weight (kg) *</label>
-            <input required type="number" step="0.01" name="weight" onChange={handleChange} className="w-full border p-2 rounded focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 12.5" />
+            <input required type="number" step="0.01" name="weight" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 12.5" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Dimensions (LxWxH cm) *</label>
-            <input required name="dimensions" onChange={handleChange} className="w-full border p-2 rounded focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 50x40x30" />
+            <input required name="dimensions" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 50x40x30" />
           </div>
         </div>
 
