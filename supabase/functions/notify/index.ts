@@ -1,46 +1,40 @@
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
-import * as OneSignal from "npm:@onesignal/node-onesignal@1.0.0-beta7";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
-const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID")!;
-const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY")!;
-
-const configuration = OneSignal.createConfiguration({
-  restApiKey: ONESIGNAL_REST_API_KEY,
-});
-const client = new OneSignal.DefaultApi(configuration);
+const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID')
+const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY')
 
 serve(async (req) => {
   try {
-    const payload = await req.json();
-    const newNotification = payload.record;
+    const payload = await req.json()
+    const record = payload.record
 
-    // Only send if the event is an INSERT
     if (payload.type === 'INSERT') {
-      const notification = new OneSignal.Notification();
-      notification.app_id = ONESIGNAL_APP_ID;
-      
-      // Target users who have the matching role tag
-      notification.filters = [
-        { field: "tag", key: "role", relation: "=", value: newNotification.role_target }
-      ];
-
-      notification.headings = { en: newNotification.title };
-      notification.contents = { en: newNotification.message };
-      
-      // If there is an AWB, make the notification clickable to open that page
-      if (newNotification.shipment_awb) {
-        notification.data = { url: `/dashboard/shipments/${newNotification.shipment_awb}` };
-        // OneSignal uses the "url" parameter in the root of the request to handle clicks
-        notification.url = `https://logistics-portal-mu.vercel.app/dashboard/shipments/${newNotification.shipment_awb}`;
+      const body = {
+        app_id: ONESIGNAL_APP_ID,
+        filters: [{ field: "tag", key: "role", relation: "=", value: record.role_target }],
+        headings: { en: record.title },
+        contents: { en: record.message },
+        // When they click the push, it takes them to the shipment page
+        url: record.shipment_awb 
+             ? `https://logistics-portal-mu.vercel.app/dashboard/shipments/${record.shipment_awb}` 
+             : "https://logistics-portal-mu.vercel.app/dashboard"
       }
 
-      const response = await client.createNotification(notification);
-      console.log("OneSignal notification sent:", response);
+      const response = await fetch("https://onesignal.com/api/v1/notifications", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Authorization": `Basic ${ONESIGNAL_REST_API_KEY}`
+        },
+        body: JSON.stringify(body)
+      })
+
+      const data = await response.json()
+      console.log("OneSignal Response:", data)
     }
 
-    return new Response(JSON.stringify({ success: true }), { status: 200 });
+    return new Response(JSON.stringify({ success: true }), { headers: { "Content-Type": "application/json" } })
   } catch (error) {
-    console.error(error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: { "Content-Type": "application/json" } })
   }
-});
+})
