@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Package, PlusCircle, LogOut, LayoutDashboard, Menu, X, Bell, BellRing } from 'lucide-react';
+import { Package, PlusCircle, LogOut, LayoutDashboard, Menu, X, Bell, BellRing, Users } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
@@ -14,7 +14,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [pushEnabled, setPushEnabled] = useState(false); // Track push status
+  const [pushEnabled, setPushEnabled] = useState(false); 
   
   const router = useRouter();
   const pathname = usePathname(); 
@@ -35,7 +35,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         else if (prefix?.includes('ops')) role = 'Operations';
         setUserRole(role);
 
-        // INITIALIZE ONESIGNAL (Fixed TS error by removing strict notifyButton)
         if (typeof window !== 'undefined') {
           OneSignal.init({
             appId: '3bb74c5f-1956-404a-b6c9-7e84c7b070d8',
@@ -47,7 +46,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           }).catch((err) => console.error("OneSignal Error:", err));
         }
 
-        // Fetch initial notifications
         const { data } = await supabase
           .from('notifications')
           .select('*')
@@ -56,7 +54,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           .limit(20);
         if (data) setNotifications(data);
 
-        // Set up Realtime Listener
         const channel = supabase
           .channel('schema-db-changes')
           .on(
@@ -99,7 +96,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
   };
 
-  // Function to request permission via button click
   const requestPushPermission = async () => {
     await OneSignal.Notifications.requestPermission();
     if (OneSignal.Notifications.permission) {
@@ -146,6 +142,13 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           <Link href="/dashboard/shipments" className={`flex items-center gap-3 p-3 rounded transition ${pathname.includes('/dashboard/shipments') ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-100'}`}>
             <Package size={20} /> All Shipments
           </Link>
+
+          {/* NEW FINANCE REPORTS LINK */}
+          {(userRole === 'Finance' || userRole === 'Super Admin') && (
+            <Link href="/dashboard/clients" className={`flex items-center gap-3 p-3 rounded transition ${pathname.includes('/dashboard/clients') ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-600 hover:bg-gray-100'}`}>
+              <Users size={20} /> Client Reports
+            </Link>
+          )}
         </nav>
 
         <div className="p-4 border-t border-gray-200">
@@ -165,8 +168,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-4">
-            
-            {/* PUSH NOTIFICATION PROMPT BUTTON */}
             {!pushEnabled && (
               <button 
                 onClick={requestPushPermission}
@@ -176,7 +177,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
               </button>
             )}
 
-            {/* NOTIFICATION BELL */}
             <div className="relative">
               <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-full relative">
                 <Bell size={24} />

@@ -9,8 +9,8 @@ export default function RegisterShipment() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Form State
-  const [formData, setFormData] = useState({
+  // Initial empty state
+  const initialFormState = {
     awb_number: '',
     client_name: '',
     sender_details: '',
@@ -20,7 +20,9 @@ export default function RegisterShipment() {
     origin: '',
     destination: '',
     commodity_type: '',
-  });
+  };
+
+  const [formData, setFormData] = useState(initialFormState);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -32,13 +34,13 @@ export default function RegisterShipment() {
     setError('');
     setSuccess('');
 
-        try {
+    try {
       // 1. Check if AWB already exists
       const { data: existingShipment } = await supabase
         .from('shipments')
         .select('awb_number')
         .eq('awb_number', formData.awb_number)
-        .maybeSingle(); // Changed to maybeSingle
+        .maybeSingle(); 
 
       if (existingShipment) {
         throw new Error('A shipment with this AWB Number already exists!');
@@ -50,7 +52,7 @@ export default function RegisterShipment() {
         .from('clients')
         .select('id')
         .ilike('client_name', formData.client_name) 
-        .maybeSingle(); // Changed to maybeSingle
+        .maybeSingle(); 
 
       if (existingClient) {
         clientId = existingClient.id;
@@ -60,11 +62,11 @@ export default function RegisterShipment() {
           .from('clients')
           .insert([{ client_name: formData.client_name }])
           .select()
-          .single(); // This one stays .single() because we just inserted it and expect 1 result
+          .single(); 
         
         if (clientError) {
-          console.error("Supabase Insert Error:", clientError); // Logs to browser console
-          throw new Error(`Database Error: ${clientError.message}`); // Shows real error on screen
+          console.error("Supabase Insert Error:", clientError); 
+          throw new Error(`Database Error: ${clientError.message}`); 
         }
         clientId = newClient.id;
       }
@@ -97,6 +99,10 @@ export default function RegisterShipment() {
       }]);
 
       setSuccess('Shipment registered successfully!');
+      
+      // CLEAR THE FORM
+      setFormData(initialFormState); 
+
       setTimeout(() => router.push('/dashboard/shipments'), 2000); 
 
     } catch (err: any) {
@@ -106,7 +112,7 @@ export default function RegisterShipment() {
     }
   };
 
-    return (
+  return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Register New Shipment</h1>
@@ -118,55 +124,51 @@ export default function RegisterShipment() {
 
       <form onSubmit={handleRegister} className="bg-white p-8 rounded-lg shadow border border-gray-200">
         
-        {/* AWB & Client */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">AWB Number *</label>
-            <input required name="awb_number" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 123-45678901" />
+            <input required name="awb_number" value={formData.awb_number} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 123-45678901" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Client Name *</label>
-            <input required name="client_name" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Acme Corp" />
+            <input required name="client_name" value={formData.client_name} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Acme Corp" />
           </div>
         </div>
 
-        {/* Sender & Receiver */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Sender Details *</label>
-            <input required name="sender_details" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="Name, Phone, Address" />
+            <input required name="sender_details" value={formData.sender_details} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="Name, Phone, Address" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Receiver Details *</label>
-            <input required name="receiver_details" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="Name, Phone, Address" />
+            <input required name="receiver_details" value={formData.receiver_details} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="Name, Phone, Address" />
           </div>
         </div>
 
-        {/* Origin, Destination, Commodity */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Origin *</label>
-            <input required name="origin" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Lagos (LOS)" />
+            <input required name="origin" value={formData.origin} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Lagos (LOS)" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Destination *</label>
-            <input required name="destination" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. London (LHR)" />
+            <input required name="destination" value={formData.destination} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. London (LHR)" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Commodity Type *</label>
-            <input required name="commodity_type" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Electronics" />
+            <input required name="commodity_type" value={formData.commodity_type} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Electronics" />
           </div>
         </div>
 
-        {/* Weight & Dimensions */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Weight (kg) *</label>
-            <input required type="number" step="0.01" name="weight" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 12.5" />
+            <input required type="number" step="0.01" name="weight" value={formData.weight} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 12.5" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Dimensions (LxWxH cm) *</label>
-            <input required name="dimensions" onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 50x40x30" />
+            <input required name="dimensions" value={formData.dimensions} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 50x40x30" />
           </div>
         </div>
 
