@@ -1,15 +1,35 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import { ShieldAlert } from 'lucide-react';
+import Link from 'next/link';
 
 export default function RegisterShipment() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
 
-  // Initial empty state
+  // 1. Check User Role on Load
+  useEffect(() => {
+    const checkRole = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email) {
+        const prefix = user.email.split('@')[0].toLowerCase();
+        if (prefix.includes('admin') || prefix.includes('it') || prefix.includes('cs')) {
+          setIsAuthorized(true);
+        } else {
+          setIsAuthorized(false);
+        }
+      } else {
+        router.push('/login');
+      }
+    };
+    checkRole();
+  }, [router]);
+
   const initialFormState = {
     awb_number: '',
     client_name: '',
@@ -35,7 +55,6 @@ export default function RegisterShipment() {
     setSuccess('');
 
     try {
-      // 1. Check if AWB already exists
       const { data: existingShipment } = await supabase
         .from('shipments')
         .select('awb_number')
@@ -46,7 +65,6 @@ export default function RegisterShipment() {
         throw new Error('A shipment with this AWB Number already exists!');
       }
 
-      // 2. Check if Client exists
       let clientId;
       const { data: existingClient } = await supabase
         .from('clients')
@@ -57,21 +75,16 @@ export default function RegisterShipment() {
       if (existingClient) {
         clientId = existingClient.id;
       } else {
-        // 3. Create new client
         const { data: newClient, error: clientError } = await supabase
           .from('clients')
           .insert([{ client_name: formData.client_name }])
           .select()
           .single(); 
         
-        if (clientError) {
-          console.error("Supabase Insert Error:", clientError); 
-          throw new Error(`Database Error: ${clientError.message}`); 
-        }
+        if (clientError) throw new Error(`Database Error: ${clientError.message}`); 
         clientId = newClient.id;
       }
 
-      // 4. Insert the Shipment
       const { error: shipmentError } = await supabase.from('shipments').insert([
         {
           awb_number: formData.awb_number,
@@ -90,7 +103,6 @@ export default function RegisterShipment() {
 
       if (shipmentError) throw shipmentError;
 
-      // NOTIFY FINANCE
       await supabase.from('notifications').insert([{
         role_target: 'Finance',
         title: 'New Shipment Registered',
@@ -99,10 +111,7 @@ export default function RegisterShipment() {
       }]);
 
       setSuccess('Shipment registered successfully!');
-      
-      // CLEAR THE FORM
       setFormData(initialFormState); 
-
       setTimeout(() => router.push('/dashboard/shipments'), 2000); 
 
     } catch (err: any) {
@@ -112,67 +121,89 @@ export default function RegisterShipment() {
     }
   };
 
+  // Loading state while checking role
+  if (isAuthorized === null) return <div className="p-10 text-center text-slate-500 animate-pulse">Verifying access...</div>;
+
+  // Block unauthorized users
+  if (!isAuthorized) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center px-4">
+        <div className="bg-red-50 p-6 rounded-full mb-6">
+          <ShieldAlert size={48} className="text-red-500" />
+        </div>
+        <h1 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h1>
+        <p className="text-slate-500 max-w-md mb-6">
+          Only Customer Service and Super Admins have permission to register new shipments. If you believe this is an error, please contact your administrator.
+        </p>
+        <Link href="/dashboard" className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-colors">
+          Return to Dashboard
+        </Link>
+      </div>
+    );
+  }
+
+  // Authorized Form Render
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Register New Shipment</h1>
-        <p className="text-gray-500">Enter the shipment details below. AWB numbers must be unique.</p>
+        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Register New Shipment</h1>
+        <p className="text-slate-500 mt-1 font-medium">Enter the shipment details below. AWB numbers must be unique.</p>
       </div>
 
-      {error && <div className="bg-red-50 text-red-600 p-4 rounded mb-6 border border-red-200">{error}</div>}
-      {success && <div className="bg-green-50 text-green-600 p-4 rounded mb-6 border border-green-200">{success}</div>}
+      {error && <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6 border border-red-200 font-medium">{error}</div>}
+      {success && <div className="bg-emerald-50 text-emerald-600 p-4 rounded-xl mb-6 border border-emerald-200 font-medium">{success}</div>}
 
-      <form onSubmit={handleRegister} className="bg-white p-8 rounded-lg shadow border border-gray-200">
+      <form onSubmit={handleRegister} className="bg-white p-6 md:p-8 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">AWB Number *</label>
-            <input required name="awb_number" value={formData.awb_number} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 123-45678901" />
+            <label className="block text-sm font-bold text-slate-700 mb-1">AWB Number *</label>
+            <input required name="awb_number" value={formData.awb_number} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="e.g. 123-45678901" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Client Name *</label>
-            <input required name="client_name" value={formData.client_name} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Acme Corp" />
+            <label className="block text-sm font-bold text-slate-700 mb-1">Client Name *</label>
+            <input required name="client_name" value={formData.client_name} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="e.g. Acme Corp" />
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Sender Details *</label>
-            <input required name="sender_details" value={formData.sender_details} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="Name, Phone, Address" />
+            <label className="block text-sm font-bold text-slate-700 mb-1">Sender Details *</label>
+            <input required name="sender_details" value={formData.sender_details} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Name, Phone, Address" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Receiver Details *</label>
-            <input required name="receiver_details" value={formData.receiver_details} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="Name, Phone, Address" />
+            <label className="block text-sm font-bold text-slate-700 mb-1">Receiver Details *</label>
+            <input required name="receiver_details" value={formData.receiver_details} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Name, Phone, Address" />
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Origin *</label>
-            <input required name="origin" value={formData.origin} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Lagos (LOS)" />
+            <label className="block text-sm font-bold text-slate-700 mb-1">Origin *</label>
+            <input required name="origin" value={formData.origin} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="e.g. Lagos (LOS)" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Destination *</label>
-            <input required name="destination" value={formData.destination} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. London (LHR)" />
+            <label className="block text-sm font-bold text-slate-700 mb-1">Destination *</label>
+            <input required name="destination" value={formData.destination} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="e.g. London (LHR)" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Commodity Type *</label>
-            <input required name="commodity_type" value={formData.commodity_type} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. Electronics" />
+            <label className="block text-sm font-bold text-slate-700 mb-1">Commodity Type *</label>
+            <input required name="commodity_type" value={formData.commodity_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="e.g. Electronics" />
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Weight (kg) *</label>
-            <input required type="number" step="0.01" name="weight" value={formData.weight} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 12.5" />
+            <label className="block text-sm font-bold text-slate-700 mb-1">Weight (kg) *</label>
+            <input required type="number" step="0.01" name="weight" value={formData.weight} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="e.g. 12.5" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Dimensions (LxWxH cm) *</label>
-            <input required name="dimensions" value={formData.dimensions} onChange={handleChange} className="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g. 50x40x30" />
+            <label className="block text-sm font-bold text-slate-700 mb-1">Dimensions (LxWxH cm) *</label>
+            <input required name="dimensions" value={formData.dimensions} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="e.g. 50x40x30" />
           </div>
         </div>
 
-        <button disabled={loading} type="submit" className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded hover:bg-blue-700 disabled:opacity-50 transition">
+        <button disabled={loading} type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md shadow-indigo-600/20">
           {loading ? 'Registering...' : 'Register Shipment'}
         </button>
       </form>

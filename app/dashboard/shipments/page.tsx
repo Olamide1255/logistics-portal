@@ -7,9 +7,24 @@ import { Plus, Search } from 'lucide-react';
 export default function ShipmentsList() {
   const [shipments, setShipments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string>('');
 
   useEffect(() => {
-    const fetchShipments = async () => {
+    const fetchData = async () => {
+      // Get User Role
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.email) {
+        const prefix = user.email.split('@')[0].toLowerCase();
+        let role = 'Unknown';
+        if (prefix.includes('admin') || prefix.includes('it')) role = 'Super Admin';
+        else if (prefix.includes('finance')) role = 'Finance';
+        else if (prefix.includes('cs')) role = 'Customer Service';
+        else if (prefix.includes('rfs')) role = 'RFS';
+        else if (prefix.includes('ops')) role = 'Operations';
+        setUserRole(role);
+      }
+
+      // Fetch Shipments
       const { data, error } = await supabase
         .from('shipments')
         .select(`*, clients (client_name)`)
@@ -19,10 +34,12 @@ export default function ShipmentsList() {
       if (error) console.error("Error fetching shipments:", error);
       setLoading(false);
     };
-    fetchShipments();
+    fetchData();
   }, []);
 
   if (loading) return <div className="p-10 text-center text-slate-500 animate-pulse">Loading shipments...</div>;
+
+  const canCreateShipment = userRole === 'Super Admin' || userRole === 'Customer Service';
 
   return (
     <div className="space-y-6">
@@ -31,9 +48,13 @@ export default function ShipmentsList() {
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">All Shipments</h1>
           <p className="text-slate-500 mt-1 font-medium">Manage and track every shipment in the system.</p>
         </div>
-        <Link href="/dashboard/register" className="inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl hover:bg-indigo-700 font-semibold shadow-md shadow-indigo-600/20 transition-all duration-200 w-full sm:w-auto">
-          <Plus size={18} /> New Shipment
-        </Link>
+        
+        {/* HIDE BUTTON FOR RFS/OPS */}
+        {canCreateShipment && (
+          <Link href="/dashboard/register" className="inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-xl hover:bg-indigo-700 font-semibold shadow-md shadow-indigo-600/20 transition-all duration-200 w-full sm:w-auto">
+            <Plus size={18} /> New Shipment
+          </Link>
+        )}
       </div>
       
       <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
@@ -59,7 +80,7 @@ export default function ShipmentsList() {
               {shipments.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
-                    No shipments found. Click "New Shipment" to create one.
+                    No shipments found.
                   </td>
                 </tr>
               )}
