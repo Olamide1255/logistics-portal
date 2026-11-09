@@ -88,6 +88,14 @@ export default function RegisterShipment() {
 
       if (shipmentError) throw shipmentError;
 
+      // NOTIFY FINANCE
+      await supabase.from('notifications').insert([{
+        role_target: 'Finance',
+        title: 'New Shipment Registered',
+        message: `AWB ${formData.awb_number} is awaiting payment approval.`,
+        shipment_awb: formData.awb_number
+      }]);
+
       setSuccess('Shipment registered successfully!');
       setTimeout(() => router.push('/dashboard/shipments'), 2000); 
 

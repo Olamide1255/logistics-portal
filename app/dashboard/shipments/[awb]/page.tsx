@@ -126,7 +126,9 @@ export default function ShipmentDetails() {
   const handleApprovePayment = async () => {
     if (!actionBy) return alert('Please enter your name in the "Action By" field first.');
     setIsSubmitting(true);
+    
     await supabase.from('shipments').update({ payment_status: 'Approved' }).eq('id', shipment.id);
+    
     await supabase.from('shipment_timeline').insert([{
       shipment_id: shipment.id,
       status_dropdown: 'Finance Approved',
@@ -134,6 +136,15 @@ export default function ShipmentDetails() {
       updated_by_role: 'Finance',
       action_by_name: actionBy
     }]);
+
+    // NOTIFY RFS
+    await supabase.from('notifications').insert([{
+      role_target: 'RFS',
+      title: 'Shipment Ready for Pickup',
+      message: `AWB ${shipment.awb_number} has been approved by Finance and is ready for pickup.`,
+      shipment_awb: shipment.awb_number
+    }]);
+
     setActionBy('');
     await fetchData();
     setIsSubmitting(false);
@@ -145,6 +156,7 @@ export default function ShipmentDetails() {
     setIsSubmitting(true);
 
     await supabase.from('shipments').update({ current_status: newStatus }).eq('id', shipment.id);
+    
     await supabase.from('shipment_timeline').insert([{
       shipment_id: shipment.id,
       status_dropdown: newStatus,
@@ -152,6 +164,23 @@ export default function ShipmentDetails() {
       updated_by_role: 'Team Member', 
       action_by_name: actionBy
     }]);
+
+    // NOTIFY NEXT TEAM BASED ON STATUS
+    if (newStatus === 'Picked Up') {
+      await supabase.from('notifications').insert([{
+        role_target: 'Operations',
+        title: 'Shipment Arriving at Ops',
+        message: `AWB ${shipment.awb_number} has been picked up by RFS and is heading to Operations.`,
+        shipment_awb: shipment.awb_number
+      }]);
+    } else if (newStatus === 'Handed to Airline') {
+      await supabase.from('notifications').insert([{
+        role_target: 'Customer Service',
+        title: 'Shipment Handed to Airline',
+        message: `AWB ${shipment.awb_number} has successfully been handed over to the Airline.`,
+        shipment_awb: shipment.awb_number
+      }]);
+    }
 
     setNewStatus('');
     setStatusNotes('');
