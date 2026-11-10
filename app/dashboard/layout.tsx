@@ -68,7 +68,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     };
 
     checkVersion();
-    const versionInterval = setInterval(checkVersion, 1 * 60 * 1000); // 1 minute
+    const versionInterval = setInterval(checkVersion, 4 * 1000); // 4 seconds
 
     return () => {
       window.removeEventListener('online', handleOnline);

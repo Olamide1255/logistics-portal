@@ -209,14 +209,27 @@ export default function ShipmentDetails() {
   };
 
   // --- OTHER FUNCTIONS (Keep as is) ---
+  // --- DELETE FUNCTION ---
   const handleDelete = async () => {
-    const confirmDelete = window.confirm(`Are you sure you want to permanently delete shipment ${awb}?`);
+    const confirmDelete = window.confirm(`Are you sure you want to permanently delete shipment ${awb}? This action cannot be undone.`);
     if (!confirmDelete) return;
+    
     setIsSubmitting(true);
+    
+    // 1. Delete the shipment
     const { error } = await supabase.from('shipments').delete().eq('id', shipment.id);
-    if (error) alert("Error deleting: " + error.message);
-    else router.push('/dashboard/shipments');
-    setIsSubmitting(false);
+    
+    if (error) {
+      alert("Error deleting shipment: " + error.message);
+      setIsSubmitting(false);
+    } else {
+      // 2. Delete all notifications related to this shipment so no one clicks a dead link
+      await supabase.from('notifications').delete().eq('shipment_awb', shipment.awb_number);
+      
+      // 3. Redirect and force Next.js to clear its cache
+      router.push('/dashboard/shipments');
+      router.refresh(); 
+    }
   };
 
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -283,7 +296,22 @@ const handleApprovePayment = async () => {
   };
 
   if (loading) return <div className="p-10 text-center text-slate-500 animate-pulse">Loading shipment details...</div>;
-  if (!shipment) return <div className="p-10 text-center text-red-500 font-bold">Shipment not found.</div>;
+if (!shipment) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] text-center px-4">
+        <div className="bg-red-50 p-6 rounded-full mb-6">
+          <X size={48} className="text-red-500" />
+        </div>
+        <h1 className="text-2xl font-bold text-slate-900 mb-2">Shipment Not Found</h1>
+        <p className="text-slate-500 max-w-md mb-6">
+          This shipment (AWB: {awb}) may have been deleted by an administrator or does not exist.
+        </p>
+        <Link href="/dashboard/shipments" className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-colors">
+          Return to Shipments
+        </Link>
+      </div>
+    );
+  }
 
   const canEditOrDelete = userRole === 'Super Admin' || userRole === 'Customer Service';
 
