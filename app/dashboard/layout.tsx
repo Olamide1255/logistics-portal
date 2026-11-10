@@ -209,12 +209,14 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       {/* PREMIUM SIDEBAR */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200/60 flex flex-col transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)]`}>
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-md shadow-indigo-600/20">
-              <Package size={24} strokeWidth={2.5} />
-            </div>
+                   <div className="flex items-center gap-3">
+            <img 
+              src="/icon-192.png" 
+              alt="Marchlog Logo" 
+              className="w-10 h-10 rounded-xl shadow-md object-cover" 
+            />
             <div>
-              <h1 className="text-lg font-bold text-slate-900 tracking-tight">Logistics Portal</h1>
+              <h1 className="text-lg font-bold text-slate-900 tracking-tight">Marchlog Portal</h1>
               <p className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full inline-block mt-1">{userRole}</p>
             </div>
           </div>
