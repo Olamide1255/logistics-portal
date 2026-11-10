@@ -18,7 +18,7 @@ export default function Dashboard() {
         const prefix = user.email.split('@')[0].toLowerCase();
         if (prefix.includes('admin') || prefix.includes('it')) currentRole = 'Super Admin';
         else if (prefix.includes('finance')) currentRole = 'Finance';
-        else if (prefix.includes('cs')) currentRole = 'Customer Service';
+        else if (prefix.includes('cs') || prefix.includes('info')) currentRole = 'Customer Service';
         else if (prefix.includes('rfs')) currentRole = 'RFS';
         else if (prefix.includes('ops')) currentRole = 'Operations';
       }

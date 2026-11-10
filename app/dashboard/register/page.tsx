@@ -18,7 +18,7 @@ export default function RegisterShipment() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user?.email) {
         const prefix = user.email.split('@')[0].toLowerCase();
-        if (prefix.includes('admin') || prefix.includes('it') || prefix.includes('cs')) {
+        if (prefix.includes('admin') || prefix.includes('it') || prefix.includes('cs') || prefix.includes('info')) {
           setIsAuthorized(true);
         } else {
           setIsAuthorized(false);

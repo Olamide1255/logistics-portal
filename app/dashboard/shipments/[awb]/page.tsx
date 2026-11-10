@@ -50,7 +50,7 @@ export default function ShipmentDetails() {
       let role = 'Unknown';
       if (prefix.includes('admin') || prefix.includes('it')) role = 'Super Admin';
       else if (prefix.includes('finance')) role = 'Finance';
-      else if (prefix.includes('cs')) role = 'Customer Service';
+      else if (prefix.includes('cs') || prefix.includes('info')) role = 'Customer Service';
       else if (prefix.includes('rfs')) role = 'RFS';
       else if (prefix.includes('ops')) role = 'Operations';
       setUserRole(role);
