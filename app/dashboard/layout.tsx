@@ -27,6 +27,12 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname(); 
 
+  // --- SOUND ALERT FUNCTION ---
+  const playNotificationSound = () => {
+    const audio = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+    audio.play().catch((e) => console.log('Audio play blocked by browser:', e));
+  };
+
   // --- NETWORK & VERSION POLLING ---
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -116,13 +122,21 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           .limit(20);
         if (data) setNotifications(data);
 
+        // Updated Realtime Listener to fix missed notifications
         const channel = supabase
-          .channel('schema-db-changes')
+          .channel(`notification-changes-${role}`) // Unique channel name
           .on(
             'postgres_changes',
-            { event: 'INSERT', schema: 'public', table: 'notifications', filter: `role_target=eq.${role}` },
+            { event: 'INSERT', schema: 'public', table: 'notifications' }, // Removed server filter to ensure no drops
             (payload) => {
+              // Filter in JS to ensure it's for the right role
+              if (payload.new.role_target !== role) return;
+
               setNotifications((prev) => [payload.new, ...prev]);
+              
+              // PLAY SOUND
+              playNotificationSound();
+
               toast(payload.new.title, {
                 description: payload.new.message,
                 action: {

@@ -17,6 +17,7 @@ const geistMono = Geist({
 export const metadata: Metadata = {
   title: "Marchlog Logistics Portal",
   description: "Marchlog Logistics Management Portal",
+  manifest: "/manifest.json",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

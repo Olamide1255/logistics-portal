@@ -311,27 +311,61 @@ export default function ShipmentDetails() {
 
   const handleApprovePayment = async () => {
     if (!actionBy) return alert('Please enter your name in the "Action By" field first.');
-    setIsSubmitting(true);
+    if (shipment.payment_status === 'Approved') return; // Guard against repeats
+    
+    setIsSubmitting(true); // Disables the button instantly
+
     try {
-      if (!navigator.onLine) throw new Error("Offline");
-      
-      await supabase.from('shipments').update({ payment_status: 'Approved' }).eq('id', shipment.id);
-      await supabase.from('shipment_timeline').insert([{
-        shipment_id: shipment.id,
-        status_dropdown: 'Finance Approved',
-        status_notes: 'Payment confirmed.',
-        updated_by_role: userRole,
-        action_by_name: actionBy
-      }]);
-      await supabase.from('notifications').insert([
-        { role_target: 'RFS', title: 'Shipment Ready for Pickup', message: `AWB ${shipment.awb_number} was approved by ${actionBy}.`, shipment_awb: shipment.awb_number },
-        { role_target: 'Customer Service', title: 'Payment Approved', message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}.`, shipment_awb: shipment.awb_number }
-      ]);
+      // Only update if it is currently Pending
+      const { error: updateError } = await supabase
+        .from('shipments')
+        .update({ payment_status: 'Approved' })
+        .eq('id', shipment.id)
+        .eq('payment_status', 'Pending'); 
+
+      if (updateError) throw updateError;
+
+      // We also add a check to ensure we only insert timeline/notifications once
+      const { data: existingTimeline } = await supabase
+        .from('shipment_timeline')
+        .select('id')
+        .eq('shipment_id', shipment.id)
+        .eq('status_dropdown', 'Finance Approved')
+        .maybeSingle();
+
+      if (!existingTimeline) {
+        await supabase.from('shipment_timeline').insert([{
+          shipment_id: shipment.id,
+          status_dropdown: 'Finance Approved',
+          status_notes: 'Payment confirmed and shipment released to next stage.',
+          updated_by_role: userRole,
+          action_by_name: actionBy
+        }]);
+
+        await supabase.from('notifications').insert([
+          {
+            role_target: 'RFS',
+            title: 'Action Needed: Shipment Ready for Pickup',
+            message: `AWB ${shipment.awb_number} was approved by ${actionBy}. Ready for pickup.`,
+            shipment_awb: shipment.awb_number
+          },
+          {
+            role_target: 'Customer Service',
+            title: 'Payment Approved',
+            message: `Finance (${actionBy}) approved payment for AWB ${shipment.awb_number}.`,
+            shipment_awb: shipment.awb_number
+          }
+        ]);
+      }
+
       setActionBy('');
+      await fetchData(); // Refresh the UI
     } catch (error) {
-      alert("You must be online to approve payments.");
+      console.error(error);
+      alert("Error approving payment.");
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   if (loading) return <div className="p-10 text-center text-slate-500 animate-pulse">Loading shipment details...</div>;
@@ -453,9 +487,10 @@ export default function ShipmentDetails() {
               {shipment.payment_status === 'Pending' && (userRole === 'Finance' || userRole === 'Super Admin') && (
                 <div className="mb-6 p-4 bg-white border border-amber-200 rounded-xl shadow-sm">
                   <p className="text-amber-700 font-bold mb-3 flex items-center gap-2"><Clock size={18}/> Awaiting Finance Approval</p>
-                  <button onClick={handleApprovePayment} disabled={isSubmitting} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-emerald-700 flex items-center gap-2 transition-all shadow-md shadow-emerald-600/20">
+                  <button onClick={handleApprovePayment} disabled={isSubmitting || shipment.payment_status === 'Approved'} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-emerald-700 flex items-center gap-2 transition-all shadow-md shadow-emerald-600/20">
                     <CheckCircle size={18} /> {isSubmitting ? 'Processing...' : 'Approve Payment & Release'}
                   </button>
+
                 </div>
               )}
 
