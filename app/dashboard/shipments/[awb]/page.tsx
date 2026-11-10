@@ -142,82 +142,25 @@ export default function ShipmentDetails() {
   // --- OFFLINE RESILIENT ACTION HANDLER ---
   const handleUpdateStatus = async () => {
     if (!newStatus) return alert('Please select a status.');
-    if (!actionBy) return alert('Please enter your name in the "Action By" field.');
+    if (!actionBy) return alert('Please enter your name.');
     setIsSubmitting(true);
 
-    // 1. OPTIMISTIC UI UPDATE (Instant feedback)
-    const optimisticTimeline = {
-      id: `temp-${Date.now()}`,
-      shipment_id: shipment.id,
-      status_dropdown: newStatus,
-      status_notes: statusNotes,
-      updated_by_role: userRole,
-      action_by_name: actionBy,
-      created_at: new Date().toISOString(),
-      isOptimistic: true
-    };
-    setTimeline(prev => [optimisticTimeline, ...prev]);
-    setShipment((prev: any) => ({ ...prev, current_status: newStatus }));
-    
-    const previousStatus = newStatus;
-    const previousNotes = statusNotes;
-    const previousActionBy = actionBy;
-
-    setNewStatus('');
-    setStatusNotes('');
-    setActionBy('');
-
-    // 2. SEND TO DATABASE IN BACKGROUND
     try {
-      if (!navigator.onLine) throw new Error("Offline");
-
-      const { error: statusError } = await supabase.from('shipments').update({ current_status: previousStatus }).eq('id', shipment.id);
-      if (statusError) throw statusError;
-
-      const { error: timelineError } = await supabase.from('shipment_timeline').insert([{
-        shipment_id: shipment.id,
-        status_dropdown: previousStatus,
-        status_notes: previousNotes,
-        updated_by_role: userRole, 
-        action_by_name: previousActionBy
+      await supabase.from('shipments').update({ current_status: newStatus }).eq('id', shipment.id);
+      await supabase.from('shipment_timeline').insert([{
+        shipment_id: shipment.id, status_dropdown: newStatus, status_notes: statusNotes, updated_by_role: userRole, action_by_name: actionBy
       }]);
-      if (timelineError) throw timelineError;
 
-      // Send Notifications
-      const notificationsToSend = [];
-      if (previousStatus === 'Picked Up' || previousStatus === 'Handed to Ops') {
-        notificationsToSend.push({
-          role_target: 'Operations',
-          title: `Action Needed: Shipment ${previousStatus}`,
-          message: `AWB ${shipment.awb_number} was updated by ${previousActionBy} (${userRole}).`,
-          shipment_awb: shipment.awb_number
-        });
-      }
-      if (userRole !== 'Customer Service') {
-        notificationsToSend.push({
-          role_target: 'Customer Service',
-          title: 'Shipment Status Updated',
-          message: `${userRole} (${previousActionBy}) changed AWB ${shipment.awb_number} to: ${previousStatus}.`,
-          shipment_awb: shipment.awb_number
-        });
-      }
-      if (notificationsToSend.length > 0) await supabase.from('notifications').insert(notificationsToSend);
+      // BROADCAST TO ALL
+      await supabase.from('notifications').insert([{
+        role_target: 'ALL',
+        title: `Shipment Update: ${newStatus}`,
+        message: `${userRole} (${actionBy}) updated AWB ${shipment.awb_number} to: ${newStatus}.`,
+        shipment_awb: shipment.awb_number
+      }]);
 
-    } catch (error) {
-      console.warn("Network unstable. Queuing status update...");
-      // Queue for later
-      queueAction('shipments', 'UPDATE', { id: shipment.id, data: { current_status: previousStatus } });
-      queueAction('shipment_timeline', 'INSERT', {
-        shipment_id: shipment.id,
-        status_dropdown: previousStatus,
-        status_notes: previousNotes,
-        updated_by_role: userRole, 
-        action_by_name: previousActionBy
-      });
-      toast.warning("Offline: Status update saved locally and will sync when online.");
-    } finally {
-      setIsSubmitting(false);
-    }
+      setNewStatus(''); setStatusNotes(''); setActionBy(''); await fetchData();
+    } catch (error) { alert("Error."); } finally { setIsSubmitting(false); }
   };
 
   const handleAddComment = async (e: React.FormEvent) => {
@@ -309,63 +252,34 @@ export default function ShipmentDetails() {
     setIsSubmitting(false);
   };
 
-  const handleApprovePayment = async () => {
+const handleApprovePayment = async () => {
     if (!actionBy) return alert('Please enter your name in the "Action By" field first.');
-    if (shipment.payment_status === 'Approved') return; // Guard against repeats
-    
-    setIsSubmitting(true); // Disables the button instantly
+    if (shipment.payment_status === 'Approved') return;
+    setIsSubmitting(true);
 
     try {
-      // Only update if it is currently Pending
-      const { error: updateError } = await supabase
-        .from('shipments')
-        .update({ payment_status: 'Approved' })
-        .eq('id', shipment.id)
-        .eq('payment_status', 'Pending'); 
-
+      const { error: updateError } = await supabase.from('shipments').update({ payment_status: 'Approved' }).eq('id', shipment.id).eq('payment_status', 'Pending'); 
       if (updateError) throw updateError;
 
-      // We also add a check to ensure we only insert timeline/notifications once
-      const { data: existingTimeline } = await supabase
-        .from('shipment_timeline')
-        .select('id')
-        .eq('shipment_id', shipment.id)
-        .eq('status_dropdown', 'Finance Approved')
-        .maybeSingle();
+      const { data: existingTimeline } = await supabase.from('shipment_timeline').select('id').eq('shipment_id', shipment.id).eq('status_dropdown', 'Finance Approved').maybeSingle();
 
       if (!existingTimeline) {
         await supabase.from('shipment_timeline').insert([{
-          shipment_id: shipment.id,
-          status_dropdown: 'Finance Approved',
-          status_notes: 'Payment confirmed and shipment released to next stage.',
-          updated_by_role: userRole,
-          action_by_name: actionBy
+          shipment_id: shipment.id, status_dropdown: 'Finance Approved', status_notes: 'Payment confirmed.', updated_by_role: userRole, action_by_name: actionBy
         }]);
 
-        await supabase.from('notifications').insert([
-          {
-            role_target: 'RFS',
-            title: 'Action Needed: Shipment Ready for Pickup',
-            message: `AWB ${shipment.awb_number} was approved by ${actionBy}. Ready for pickup.`,
-            shipment_awb: shipment.awb_number
-          },
-          {
-            role_target: 'Customer Service',
-            title: 'Payment Approved',
-            message: `Finance (${actionBy}) approved payment for AWB ${shipment.awb_number}.`,
-            shipment_awb: shipment.awb_number
-          }
-        ]);
+        // BROADCAST TO ALL
+        await supabase.from('notifications').insert([{
+          role_target: 'ALL',
+          title: 'Payment Approved!',
+          message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}. Ready for pickup.`,
+          shipment_awb: shipment.awb_number
+        }]);
       }
 
       setActionBy('');
-      await fetchData(); // Refresh the UI
-    } catch (error) {
-      console.error(error);
-      alert("Error approving payment.");
-    } finally {
-      setIsSubmitting(false);
-    }
+      await fetchData(); 
+    } catch (error) { alert("Error."); } finally { setIsSubmitting(false); }
   };
 
   if (loading) return <div className="p-10 text-center text-slate-500 animate-pulse">Loading shipment details...</div>;
