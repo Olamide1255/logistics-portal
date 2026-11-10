@@ -1,6 +1,5 @@
 'use client';
 
-import OneSignal from 'react-onesignal';
 import { Suspense, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
@@ -29,7 +28,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
   // --- LOUD BASE64 AUDIO ---
   const playNotificationSound = () => {
-    // This is an embedded base64 audio file. It CANNOT fail due to network issues.
     const audio = new Audio("data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"+ "1234567890".repeat(20)); 
     audio.volume = 1.0;
     audio.play().catch((e) => console.log('Audio play blocked by browser:', e));
@@ -96,14 +94,15 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         else if (prefix?.includes('ops')) role = 'Operations';
         setUserRole(role);
 
+        // ADD ROLE TAG VIA DEFERRED SCRIPT
         if (typeof window !== 'undefined') {
-          OneSignal.init({ appId: '3bb74c5f-1956-404a-b6c9-7e84c7b070d8' })
-            .then(() => {
-              OneSignal.User.addTag('role', role);
-              if (Notification.permission === 'granted' || OneSignal.Notifications.permission) {
-                setPushEnabled(true);
-              }
-            }).catch((err) => console.error("OneSignal Error:", err));
+          (window as any).OneSignalDeferred = (window as any).OneSignalDeferred || [];
+          (window as any).OneSignalDeferred.push(async function(OneSignal: any) {
+            await OneSignal.User.addTag('role', role);
+            if (Notification.permission === 'granted' || OneSignal.Notifications.permission) {
+              setPushEnabled(true);
+            }
+          });
         }
 
         // Fetch initial notifications (Role-specific OR broadcast ALL)
@@ -122,18 +121,14 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             'postgres_changes',
             { event: 'INSERT', schema: 'public', table: 'notifications' },
             (payload) => {
-              // Check if it's for this role OR for ALL
               if (payload.new.role_target !== role && payload.new.role_target !== 'ALL') return;
 
               setNotifications((prev) => [payload.new, ...prev]);
-              
-              // PLAY LOUD SOUND
               playNotificationSound();
 
-              // HUGE BANNER
               toast(payload.new.title, {
                 description: payload.new.message,
-                duration: 10000, // stays for 10 seconds
+                duration: 10000,
                 action: {
                   label: 'View',
                   onClick: () => {
@@ -162,21 +157,24 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
   };
 
+  // REQUEST PERMISSION VIA DEFERRED SCRIPT
   const requestPushPermission = async () => {
-    try {
-      await OneSignal.Notifications.requestPermission();
-      if (Notification.permission === 'granted') {
-        setPushEnabled(true);
-        toast.success('Push notifications enabled!');
-      } else {
-        toast.error('Notifications blocked. Enable in browser settings.');
-      }
-    } catch (error) { console.error(error); }
+    if (typeof window !== 'undefined') {
+      (window as any).OneSignalDeferred = (window as any).OneSignalDeferred || [];
+      (window as any).OneSignalDeferred.push(async function(OneSignal: any) {
+        await OneSignal.Notifications.requestPermission();
+        if (Notification.permission === 'granted') {
+          setPushEnabled(true);
+          toast.success('Push notifications enabled!');
+        } else {
+          toast.error('Notifications blocked. Enable in browser settings.');
+        }
+      });
+    }
   };
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  // --- APP ICON BADGE ---
   useEffect(() => {
     if (typeof window !== 'undefined' && 'setAppBadge' in navigator) {
       if (unreadCount > 0) navigator.setAppBadge(unreadCount).catch(() => {});
@@ -188,7 +186,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
       <Toaster position="top-right" richColors theme="light" closeButton />
       
-      {/* SIDEBAR (Kept exactly as is) */}
+      {/* SIDEBAR */}
       <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200/60 flex flex-col transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)]`}>
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <div className="flex items-center gap-3">
