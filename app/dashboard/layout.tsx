@@ -77,8 +77,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     };
 
     checkVersion();
-    const versionInterval = setInterval(checkVersion, 5 * 60 * 1000); // 5 minutes
-
+    const versionInterval = setInterval(checkVersion, 1 * 60 * 1000); // 1 minute
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
@@ -187,6 +186,17 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   };
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
+
+   // --- APP ICON BADGE UPDATE ---
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'setAppBadge' in navigator) {
+      if (unreadCount > 0) {
+        navigator.setAppBadge(unreadCount).catch((e) => console.log('Badge error', e));
+      } else {
+        navigator.clearAppBadge().catch((e) => console.log('Badge error', e));
+      }
+    }
+  }, [unreadCount]);
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
