@@ -111,24 +111,31 @@ export default function ShipmentDetails() {
 
     const channel = supabase
       .channel(`shipment_${shipment.id}`)
+      // 1. Listen for new comments
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shipment_comments', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
-        // Only add if it's not already there (Optimistic UI check)
         setComments((prev) => {
-          if (prev.some(c => c.id === payload.new.id || c.isOptimistic)) {
-            // Replace the optimistic comment with the real one
-            return prev.map(c => c.isOptimistic ? payload.new : c).filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
-          }
-          return [...prev, payload.new];
+          // If it's already there, do nothing (prevents duplicates)
+          if (prev.some(c => c.id === payload.new.id)) return prev;
+          
+          // Remove any leftover optimistic comments
+          const cleaned = prev.filter(c => !c.isOptimistic);
+          
+          return [...cleaned, payload.new];
         });
       })
+      // 2. Listen for new timeline entries
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shipment_timeline', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
         setTimeline((prev) => {
-          if (prev.some(t => t.id === payload.new.id || t.isOptimistic)) {
-             return prev.map(t => t.isOptimistic ? payload.new : t).filter((v, i, a) => a.findIndex(x => x.id === v.id) === i);
-          }
-          return [payload.new, ...prev];
+          // If it's already there, do nothing
+          if (prev.some(t => t.id === payload.new.id)) return prev;
+          
+          // Remove any leftover optimistic entries
+          const cleaned = prev.filter(t => !t.isOptimistic);
+
+          return [payload.new, ...cleaned];
         });
       })
+      // 3. Listen for status / payment updates
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'shipments', filter: `id=eq.${shipment.id}` }, (payload) => {
         setShipment((prev: any) => ({ ...prev, ...payload.new }));
       })
@@ -145,22 +152,65 @@ export default function ShipmentDetails() {
     if (!actionBy) return alert('Please enter your name.');
     setIsSubmitting(true);
 
+    // 1. OPTIMISTIC UI UPDATE
+    const tempId = `temp-${Date.now()}`;
+    const optimisticTimeline = {
+      id: tempId,
+      shipment_id: shipment.id,
+      status_dropdown: newStatus,
+      status_notes: statusNotes,
+      updated_by_role: userRole,
+      action_by_name: actionBy,
+      created_at: new Date().toISOString(),
+      isOptimistic: true
+    };
+
+    setTimeline(prev => [optimisticTimeline, ...prev]);
+    setShipment((prev: any) => ({ ...prev, current_status: newStatus }));
+
+    const savedStatus = newStatus;
+    const savedNotes = statusNotes;
+    const savedActionBy = actionBy;
+
+    setNewStatus(''); 
+    setStatusNotes(''); 
+    setActionBy('');
+
     try {
-      await supabase.from('shipments').update({ current_status: newStatus }).eq('id', shipment.id);
-      await supabase.from('shipment_timeline').insert([{
-        shipment_id: shipment.id, status_dropdown: newStatus, status_notes: statusNotes, updated_by_role: userRole, action_by_name: actionBy
-      }]);
+      if (!navigator.onLine) throw new Error("Offline");
+
+      const { error: statusError } = await supabase.from('shipments').update({ current_status: savedStatus }).eq('id', shipment.id);
+      if (statusError) throw statusError;
+
+      const { data, error: timelineError } = await supabase.from('shipment_timeline').insert([{
+        shipment_id: shipment.id, 
+        status_dropdown: savedStatus, 
+        status_notes: savedNotes, 
+        updated_by_role: userRole, 
+        action_by_name: savedActionBy
+      }]).select().single();
+      
+      if (timelineError) throw timelineError;
+
+      // Replace optimistic timeline entry with real data
+      setTimeline(prev => prev.map(t => t.id === tempId ? data : t));
 
       // BROADCAST TO ALL
       await supabase.from('notifications').insert([{
         role_target: 'ALL',
-        title: `Shipment Update: ${newStatus}`,
-        message: `${userRole} (${actionBy}) updated AWB ${shipment.awb_number} to: ${newStatus}.`,
+        title: `Shipment Update: ${savedStatus}`,
+        message: `${userRole} (${savedActionBy}) updated AWB ${shipment.awb_number} to: ${savedStatus}.`,
         shipment_awb: shipment.awb_number
       }]);
 
-      setNewStatus(''); setStatusNotes(''); setActionBy(''); await fetchData();
-    } catch (error) { alert("Error."); } finally { setIsSubmitting(false); }
+    } catch (error) {
+      console.error(error);
+      setTimeline(prev => prev.filter(t => t.id !== tempId));
+      setShipment((prev: any) => ({ ...prev, current_status: shipment.current_status })); // Revert status
+      toast.error("Failed to update status. Please check connection.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleAddComment = async (e: React.FormEvent) => {
@@ -168,8 +218,9 @@ export default function ShipmentDetails() {
     if (!newComment || !commentBy) return;
 
     // 1. OPTIMISTIC UI UPDATE
+    const tempId = `temp-${Date.now()}`;
     const optimisticComment = {
-      id: `temp-${Date.now()}`,
+      id: tempId,
       shipment_id: shipment.id,
       comment_text: newComment,
       updated_by_role: userRole,
@@ -188,16 +239,23 @@ export default function ShipmentDetails() {
     try {
       if (!navigator.onLine) throw new Error("Offline");
       
-      const { error } = await supabase.from('shipment_comments').insert([{
+      const { data, error } = await supabase.from('shipment_comments').insert([{
         shipment_id: shipment.id,
         comment_text: savedComment,
         updated_by_role: userRole,
         action_by_name: savedCommentBy
-      }]);
+      }]).select().single();
+      
       if (error) throw error;
+
+      // Replace the optimistic comment with the real one immediately
+      setComments(prev => prev.map(c => c.id === tempId ? data : c));
 
     } catch (error) {
       console.warn("Network unstable. Queuing comment...");
+      // If it fails, remove the optimistic one
+      setComments(prev => prev.filter(c => c.id !== tempId));
+      
       queueAction('shipment_comments', 'INSERT', {
         shipment_id: shipment.id,
         comment_text: savedComment,
@@ -208,7 +266,6 @@ export default function ShipmentDetails() {
     }
   };
 
-  // --- OTHER FUNCTIONS (Keep as is) ---
   // --- DELETE FUNCTION ---
   const handleDelete = async () => {
     const confirmDelete = window.confirm(`Are you sure you want to permanently delete shipment ${awb}? This action cannot be undone.`);
@@ -216,17 +273,13 @@ export default function ShipmentDetails() {
     
     setIsSubmitting(true);
     
-    // 1. Delete the shipment
     const { error } = await supabase.from('shipments').delete().eq('id', shipment.id);
     
     if (error) {
       alert("Error deleting shipment: " + error.message);
       setIsSubmitting(false);
     } else {
-      // 2. Delete all notifications related to this shipment so no one clicks a dead link
       await supabase.from('notifications').delete().eq('shipment_awb', shipment.awb_number);
-      
-      // 3. Redirect and force Next.js to clear its cache
       router.push('/dashboard/shipments');
       router.refresh(); 
     }
@@ -265,7 +318,7 @@ export default function ShipmentDetails() {
     setIsSubmitting(false);
   };
 
-const handleApprovePayment = async () => {
+  const handleApprovePayment = async () => {
     if (!actionBy) return alert('Please enter your name in the "Action By" field first.');
     if (shipment.payment_status === 'Approved') return;
     setIsSubmitting(true);
@@ -277,9 +330,15 @@ const handleApprovePayment = async () => {
       const { data: existingTimeline } = await supabase.from('shipment_timeline').select('id').eq('shipment_id', shipment.id).eq('status_dropdown', 'Finance Approved').maybeSingle();
 
       if (!existingTimeline) {
-        await supabase.from('shipment_timeline').insert([{
+        const { data, error: timelineError } = await supabase.from('shipment_timeline').insert([{
           shipment_id: shipment.id, status_dropdown: 'Finance Approved', status_notes: 'Payment confirmed.', updated_by_role: userRole, action_by_name: actionBy
-        }]);
+        }]).select().single();
+        
+        if (timelineError) throw timelineError;
+
+        // Update local state immediately
+        setShipment((prev: any) => ({ ...prev, payment_status: 'Approved' }));
+        setTimeline(prev => [data, ...prev]);
 
         // BROADCAST TO ALL
         await supabase.from('notifications').insert([{
@@ -291,12 +350,16 @@ const handleApprovePayment = async () => {
       }
 
       setActionBy('');
-      await fetchData(); 
-    } catch (error) { alert("Error."); } finally { setIsSubmitting(false); }
+    } catch (error) { 
+      alert("Error approving payment."); 
+    } finally { 
+      setIsSubmitting(false); 
+    }
   };
 
   if (loading) return <div className="p-10 text-center text-slate-500 animate-pulse">Loading shipment details...</div>;
-if (!shipment) {
+  
+  if (!shipment) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center px-4">
         <div className="bg-red-50 p-6 rounded-full mb-6">
@@ -432,7 +495,6 @@ if (!shipment) {
                   <button onClick={handleApprovePayment} disabled={isSubmitting || shipment.payment_status === 'Approved'} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-emerald-700 flex items-center gap-2 transition-all shadow-md shadow-emerald-600/20">
                     <CheckCircle size={18} /> {isSubmitting ? 'Processing...' : 'Approve Payment & Release'}
                   </button>
-
                 </div>
               )}
 
