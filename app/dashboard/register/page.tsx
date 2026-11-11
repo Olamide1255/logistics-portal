@@ -12,7 +12,6 @@ export default function RegisterShipment() {
   const [success, setSuccess] = useState('');
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
 
-  // 1. Check User Role on Load
   useEffect(() => {
     const checkRole = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -33,6 +32,7 @@ export default function RegisterShipment() {
   const initialFormState = {
     awb_number: '',
     client_name: '',
+    shipment_type: 'Export', // Default to Export
     sender_details: '',
     receiver_details: '',
     weight: '',
@@ -44,7 +44,7 @@ export default function RegisterShipment() {
 
   const [formData, setFormData] = useState(initialFormState);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -61,9 +61,7 @@ export default function RegisterShipment() {
         .eq('awb_number', formData.awb_number)
         .maybeSingle(); 
 
-      if (existingShipment) {
-        throw new Error('A shipment with this AWB Number already exists!');
-      }
+      if (existingShipment) throw new Error('A shipment with this AWB Number already exists!');
 
       let clientId;
       const { data: existingClient } = await supabase
@@ -89,6 +87,7 @@ export default function RegisterShipment() {
         {
           awb_number: formData.awb_number,
           client_id: clientId,
+          shipment_type: formData.shipment_type, // Save Import/Export
           sender_details: formData.sender_details,
           receiver_details: formData.receiver_details,
           weight: parseFloat(formData.weight),
@@ -103,10 +102,11 @@ export default function RegisterShipment() {
 
       if (shipmentError) throw shipmentError;
 
+      // Notify Finance
       await supabase.from('notifications').insert([{
         role_target: 'Finance',
         title: 'New Shipment Registered',
-        message: `AWB ${formData.awb_number} is awaiting payment approval.`,
+        message: `AWB ${formData.awb_number} (${formData.shipment_type}) is awaiting payment approval.`,
         shipment_awb: formData.awb_number
       }]);
 
@@ -121,28 +121,19 @@ export default function RegisterShipment() {
     }
   };
 
-  // Loading state while checking role
   if (isAuthorized === null) return <div className="p-10 text-center text-slate-500 animate-pulse">Verifying access...</div>;
 
-  // Block unauthorized users
   if (!isAuthorized) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] text-center px-4">
-        <div className="bg-red-50 p-6 rounded-full mb-6">
-          <ShieldAlert size={48} className="text-red-500" />
-        </div>
+        <div className="bg-red-50 p-6 rounded-full mb-6"><ShieldAlert size={48} className="text-red-500" /></div>
         <h1 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h1>
-        <p className="text-slate-500 max-w-md mb-6">
-          Only Customer Service and Super Admins have permission to register new shipments. If you believe this is an error, please contact your administrator.
-        </p>
-        <Link href="/dashboard" className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-colors">
-          Return to Dashboard
-        </Link>
+        <p className="text-slate-500 max-w-md mb-6">Only Customer Service and Super Admins can register new shipments.</p>
+        <Link href="/dashboard" className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-colors">Return to Dashboard</Link>
       </div>
     );
   }
 
-  // Authorized Form Render
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
@@ -155,52 +146,38 @@ export default function RegisterShipment() {
 
       <form onSubmit={handleRegister} className="bg-white p-6 md:p-8 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <div className="md:col-span-1">
             <label className="block text-sm font-bold text-slate-700 mb-1">AWB Number *</label>
-            <input required name="awb_number" value={formData.awb_number} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="e.g. 123-45678901" />
+            <input required name="awb_number" value={formData.awb_number} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 123-45678901" />
           </div>
-          <div>
+          <div className="md:col-span-1">
             <label className="block text-sm font-bold text-slate-700 mb-1">Client Name *</label>
-            <input required name="client_name" value={formData.client_name} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="e.g. Acme Corp" />
+            <input required name="client_name" value={formData.client_name} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. Acme Corp" />
+          </div>
+          <div className="md:col-span-1">
+            <label className="block text-sm font-bold text-slate-700 mb-1">Shipment Type *</label>
+            <select required name="shipment_type" value={formData.shipment_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+              <option value="Export">Export</option>
+              <option value="Import">Import</option>
+            </select>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Sender Details *</label>
-            <input required name="sender_details" value={formData.sender_details} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Name, Phone, Address" />
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Receiver Details *</label>
-            <input required name="receiver_details" value={formData.receiver_details} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="Name, Phone, Address" />
-          </div>
+          <div><label className="block text-sm font-bold text-slate-700 mb-1">Sender Details *</label><input required name="sender_details" value={formData.sender_details} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="Name, Phone, Address" /></div>
+          <div><label className="block text-sm font-bold text-slate-700 mb-1">Receiver Details *</label><input required name="receiver_details" value={formData.receiver_details} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="Name, Phone, Address" /></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Origin *</label>
-            <input required name="origin" value={formData.origin} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="e.g. Lagos (LOS)" />
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Destination *</label>
-            <input required name="destination" value={formData.destination} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="e.g. London (LHR)" />
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Commodity Type *</label>
-            <input required name="commodity_type" value={formData.commodity_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="e.g. Electronics" />
-          </div>
+          <div><label className="block text-sm font-bold text-slate-700 mb-1">Origin *</label><input required name="origin" value={formData.origin} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. Lagos (LOS)" /></div>
+          <div><label className="block text-sm font-bold text-slate-700 mb-1">Destination *</label><input required name="destination" value={formData.destination} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. London (LHR)" /></div>
+          <div><label className="block text-sm font-bold text-slate-700 mb-1">Commodity Type *</label><input required name="commodity_type" value={formData.commodity_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. Electronics" /></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Weight (kg) *</label>
-            <input required type="number" step="0.01" name="weight" value={formData.weight} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="e.g. 12.5" />
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Dimensions (LxWxH cm) *</label>
-            <input required name="dimensions" value={formData.dimensions} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all" placeholder="e.g. 50x40x30" />
-          </div>
+          <div><label className="block text-sm font-bold text-slate-700 mb-1">Weight (kg) *</label><input required type="number" step="0.01" name="weight" value={formData.weight} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 12.5" /></div>
+          <div><label className="block text-sm font-bold text-slate-700 mb-1">Dimensions (LxWxH cm) *</label><input required name="dimensions" value={formData.dimensions} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 50x40x30" /></div>
         </div>
 
         <button disabled={loading} type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md shadow-indigo-600/20">
