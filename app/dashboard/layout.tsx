@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useRef } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -26,12 +26,11 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   
   const router = useRouter();
   const pathname = usePathname(); 
-  const channelRef = useRef<any>(null);
 
   const playNotificationSound = () => {
     const audio = new Audio("data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"+ "1234567890".repeat(20)); 
     audio.volume = 1.0;
-    audio.play().catch((e) => console.log('Audio play blocked by browser:', e));
+    audio.play().catch((e) => console.log('Audio play blocked:', e));
   };
 
   const fetchNotifications = async (role: string) => {
@@ -44,36 +43,12 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     if (data) setNotifications(data);
   };
 
+  // 1. GET USER & SET ROLE
   useEffect(() => {
-    setIsOnline(navigator.onLine);
-    const handleOnline = () => { setIsOnline(true); processQueue(); toast.success("Connection restored."); };
-    const handleOffline = () => { setIsOnline(false); toast.error("You are offline."); };
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    let currentVersion = '';
-    const checkVersion = async () => {
-      try {
-        const res = await fetch('/api/version');
-        const data = await res.json();
-        if (!currentVersion) currentVersion = data.version;
-        else if (currentVersion !== data.version) {
-          toast.info("New Update Available", { description: "Please refresh.", duration: Infinity, action: { label: 'Update', onClick: () => window.location.reload() } });
-        }
-      } catch (e) {}
-    };
-    checkVersion();
-    const versionInterval = setInterval(checkVersion, 15 * 1000);
-    return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); clearInterval(versionInterval); };
-  }, []);
-
-  useEffect(() => {
-    let pollInterval: any = null;
-    let currentRole = '';
-
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/login'); return; }
-
+      
       setEmail(user.email || '');
       setUserId(user.id);
       
@@ -84,9 +59,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       else if (prefix?.includes('cs') || prefix?.includes('info')) role = 'Customer Service'; 
       else if (prefix?.includes('rfs')) role = 'RFS';
       else if (prefix?.includes('ops')) role = 'Operations';
-      else if (prefix?.includes('freight')) role = 'Freight'; // NEW ROLE ADDED HERE
+      else if (prefix?.includes('freight')) role = 'Freight';
       setUserRole(role);
-      currentRole = role;
 
       if (typeof window !== 'undefined') {
         (window as any).OneSignalDeferred = (window as any).OneSignalDeferred || [];
@@ -95,26 +69,82 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           if (Notification.permission === 'granted' || OneSignal.Notifications.permission) setPushEnabled(true);
         });
       }
-
       await fetchNotifications(role);
+    };
+    getUser();
+  }, [router]);
 
-      if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null; }
-      const channel = supabase
-        .channel(`notif-changes-${user.id}-${Date.now()}`)
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
-          if (payload.new.role_target !== currentRole && payload.new.role_target !== 'ALL') return;
-          setNotifications((prev) => prev.some(n => n.id === payload.new.id) ? prev : [payload.new, ...prev]);
-          playNotificationSound();
-          toast(payload.new.title, { description: payload.new.message, duration: 10000, action: { label: 'View', onClick: () => { if (payload.new.shipment_awb) router.push(`/dashboard/shipments/${payload.new.shipment_awb}`); } } });
-        }).subscribe();
-      channelRef.current = channel;
+  // 2. REALTIME WEBSOCKET (Runs once userRole is known)
+  useEffect(() => {
+    if (userRole === 'Loading...' || !userId) return;
 
-      pollInterval = setInterval(() => { if (navigator.onLine) fetchNotifications(currentRole); }, 30 * 1000);
+    console.log(`Connecting Realtime for ${userRole}...`);
+    const channel = supabase
+      .channel(`notif-changes-${userId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
+        if (payload.new.role_target !== userRole && payload.new.role_target !== 'ALL') return;
+        
+        setNotifications((prev) => prev.some(n => n.id === payload.new.id) ? prev : [payload.new, ...prev]);
+        playNotificationSound();
+        toast(payload.new.title, { 
+          description: payload.new.message, 
+          duration: 10000, 
+          action: { label: 'View', onClick: () => { if (payload.new.shipment_awb) router.push(`/dashboard/shipments/${payload.new.shipment_awb}`); } } 
+        });
+      })
+      .subscribe((status) => {
+        console.log(`Realtime Status: ${status}`);
+      });
+
+    return () => {
+      console.log("Disconnecting Realtime...");
+      supabase.removeChannel(channel);
+    };
+  }, [userRole, userId, router]);
+
+  // 3. FALLBACK POLLING (Every 30 seconds - Bulletproof)
+  useEffect(() => {
+    if (userRole === 'Loading...') return;
+    
+    console.log("Starting 30s Notification Polling...");
+    const interval = setInterval(() => {
+      if (navigator.onLine) fetchNotifications(userRole);
+    }, 30 * 1000);
+
+    return () => clearInterval(interval);
+  }, [userRole]);
+
+  // 4. VERSION CHECK (Every 15 seconds - Bulletproof)
+  useEffect(() => {
+    console.log("Starting 15s Version Check...");
+    let currentVersion = '';
+    
+    const checkVersion = async () => {
+      try {
+        const res = await fetch('/api/version');
+        const data = await res.json();
+        if (!currentVersion) {
+          currentVersion = data.version;
+        } else if (currentVersion !== data.version) {
+          toast.info("New Update Available", { description: "Please refresh.", duration: Infinity, action: { label: 'Update', onClick: () => window.location.reload() } });
+        }
+      } catch (e) {}
     };
 
-    getUser();
-    return () => { if (channelRef.current) supabase.removeChannel(channelRef.current); if (pollInterval) clearInterval(pollInterval); };
-  }, [router]);
+    checkVersion();
+    const interval = setInterval(checkVersion, 15 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // 5. NETWORK STATUS
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    const handleOnline = () => { setIsOnline(true); processQueue(); toast.success("Connection restored."); };
+    const handleOffline = () => { setIsOnline(false); toast.error("You are offline."); };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
+  }, []);
 
   useEffect(() => { setIsSidebarOpen(false); }, [pathname]);
 
