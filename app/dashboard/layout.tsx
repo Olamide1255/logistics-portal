@@ -89,7 +89,14 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         toast(payload.new.title, { 
           description: payload.new.message, 
           duration: 10000, 
-          action: { label: 'View', onClick: () => { if (payload.new.shipment_awb) router.push(`/dashboard/shipments/${payload.new.shipment_awb}`); } } 
+          action: { 
+          label: 'View', 
+            onClick: () => { 
+              if (payload.new.shipment_awb && payload.new.shipment_awb !== 'null') {
+                router.push(`/dashboard/shipments/${encodeURIComponent(payload.new.shipment_awb.trim())}`); 
+              }
+            } 
+          }
         });
       })
       .subscribe((status) => {
@@ -214,7 +221,13 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                   <div className="max-h-100 overflow-y-auto">
                     {notifications.length === 0 && <p className="p-4 text-center text-slate-500 text-sm">No notifications.</p>}
                     {notifications.map(n => (
-                      <div key={n.id} onClick={() => { markAsRead(n.id); if (n.shipment_awb) router.push(`/dashboard/shipments/${n.shipment_awb}`); setShowNotifications(false); }} className={`p-4 border-b cursor-pointer hover:bg-slate-50 ${!n.is_read ? 'bg-indigo-50/50' : ''}`}>
+                      <div key={n.id} onClick={() => { 
+  markAsRead(n.id); 
+  if (n.shipment_awb && n.shipment_awb !== 'null') {
+    router.push(`/dashboard/shipments/${encodeURIComponent(n.shipment_awb.trim())}`); 
+  }
+  setShowNotifications(false); 
+}} className={`p-4 border-b cursor-pointer hover:bg-slate-50 ${!n.is_read ? 'bg-indigo-50/50' : ''}`}>
                         <p className={`text-sm ${!n.is_read ? 'font-bold' : ''}`}>{n.title}</p>
                         <p className="text-xs text-slate-500">{n.message}</p>
                       </div>
