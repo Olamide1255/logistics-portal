@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -11,6 +11,7 @@ import { processQueue } from '@/lib/offlineSync';
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<string>('Loading...');
   const [email, setEmail] = useState<string>('');
+  const [userId, setUserId] = useState<string>('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -26,11 +27,28 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname(); 
 
+  // Use a ref for the channel so it can be accessed in cleanup
+  const channelRef = useRef<any>(null);
+
   // --- LOUD BASE64 AUDIO ---
   const playNotificationSound = () => {
     const audio = new Audio("data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"+ "1234567890".repeat(20)); 
     audio.volume = 1.0;
     audio.play().catch((e) => console.log('Audio play blocked by browser:', e));
+  };
+
+  // --- FETCH NOTIFICATIONS FUNCTION ---
+  const fetchNotifications = async (role: string) => {
+    const { data } = await supabase
+      .from('notifications')
+      .select('*')
+      .or(`role_target.eq.${role},role_target.eq.ALL`)
+      .order('created_at', { ascending: false })
+      .limit(30);
+    
+    if (data) {
+      setNotifications(data);
+    }
   };
 
   // --- NETWORK & VERSION POLLING ---
@@ -68,7 +86,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     };
 
     checkVersion();
-    const versionInterval = setInterval(checkVersion, 4 * 1000); // 4 seconds
+    const versionInterval = setInterval(checkVersion, 15 * 1000); // 15 seconds
 
     return () => {
       window.removeEventListener('online', handleOnline);
@@ -77,72 +95,107 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // --- AUTH & REALTIME NOTIFICATIONS ---
+  // --- AUTH, REALTIME & POLLING ---
   useEffect(() => {
+    let pollInterval: any = null;
+    let currentRole = '';
+
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.push('/login');
-      } else {
-        setEmail(user.email || '');
-        const prefix = user.email?.split('@')[0].toLowerCase();
-        let role = 'Unknown';
-        if (prefix?.includes('admin') || prefix?.includes('it')) role = 'Super Admin';
-        else if (prefix?.includes('finance')) role = 'Finance';
-        else if (prefix?.includes('cs') || prefix?.includes('info')) role = 'Customer Service'; 
-        else if (prefix?.includes('rfs')) role = 'RFS';
-        else if (prefix?.includes('ops')) role = 'Operations';
-        setUserRole(role);
+        return;
+      }
 
-        // ADD ROLE TAG VIA DEFERRED SCRIPT
-        if (typeof window !== 'undefined') {
-          (window as any).OneSignalDeferred = (window as any).OneSignalDeferred || [];
-          (window as any).OneSignalDeferred.push(async function(OneSignal: any) {
-            await OneSignal.User.addTag('role', role);
-            if (Notification.permission === 'granted' || OneSignal.Notifications.permission) {
-              setPushEnabled(true);
-            }
-          });
-        }
+      setEmail(user.email || '');
+      setUserId(user.id);
+      
+      const prefix = user.email?.split('@')[0].toLowerCase();
+      let role = 'Unknown';
+      if (prefix?.includes('admin') || prefix?.includes('it')) role = 'Super Admin';
+      else if (prefix?.includes('finance')) role = 'Finance';
+      else if (prefix?.includes('cs') || prefix?.includes('info')) role = 'Customer Service'; 
+      else if (prefix?.includes('rfs')) role = 'RFS';
+      else if (prefix?.includes('ops')) role = 'Operations';
+      setUserRole(role);
+      currentRole = role;
 
-        // Fetch initial notifications (Role-specific OR broadcast ALL)
-        const { data } = await supabase
-          .from('notifications')
-          .select('*')
-          .or(`role_target.eq.${role},role_target.eq.ALL`)
-          .order('created_at', { ascending: false })
-          .limit(20);
-        if (data) setNotifications(data);
+      // Add OneSignal role tag
+      if (typeof window !== 'undefined') {
+        (window as any).OneSignalDeferred = (window as any).OneSignalDeferred || [];
+        (window as any).OneSignalDeferred.push(async function(OneSignal: any) {
+          await OneSignal.User.addTag('role', role);
+          if (Notification.permission === 'granted' || OneSignal.Notifications.permission) {
+            setPushEnabled(true);
+          }
+        });
+      }
 
-        // Realtime Listener
-        const channel = supabase
-          .channel(`notification-changes-global`)
-          .on(
-            'postgres_changes',
-            { event: 'INSERT', schema: 'public', table: 'notifications' },
-            (payload) => {
-              if (payload.new.role_target !== role && payload.new.role_target !== 'ALL') return;
+      // Initial fetch
+      await fetchNotifications(role);
 
-              setNotifications((prev) => [payload.new, ...prev]);
-              playNotificationSound();
+      // Remove old channel if it exists
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
 
-              toast(payload.new.title, {
-                description: payload.new.message,
-                duration: 10000,
-                action: {
-                  label: 'View',
-                  onClick: () => {
-                    if (payload.new.shipment_awb) router.push(`/dashboard/shipments/${payload.new.shipment_awb}`);
-                  }
+      // Unique channel name per user to avoid conflicts
+      const channelName = `notif-changes-${user.id}-${Date.now()}`;
+      
+      const channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'notifications' },
+          (payload) => {
+            // Check if notification is for this role or ALL
+            if (payload.new.role_target !== currentRole && payload.new.role_target !== 'ALL') return;
+
+            setNotifications((prev) => {
+              // Prevent duplicates
+              if (prev.some(n => n.id === payload.new.id)) return prev;
+              return [payload.new, ...prev];
+            });
+            
+            playNotificationSound();
+
+            toast(payload.new.title, {
+              description: payload.new.message,
+              duration: 10000,
+              action: {
+                label: 'View',
+                onClick: () => {
+                  if (payload.new.shipment_awb) router.push(`/dashboard/shipments/${payload.new.shipment_awb}`);
                 }
-              });
-            }
-          ).subscribe();
+              }
+            });
+          }
+        )
+        .subscribe((status) => {
+          console.log(`Realtime subscription status: ${status}`);
+        });
 
-        return () => { supabase.removeChannel(channel); };
+      channelRef.current = channel;
+
+      // FALLBACK POLLING: Every 30 seconds, re-fetch just in case realtime missed anything
+      pollInterval = setInterval(() => {
+        if (navigator.onLine) fetchNotifications(currentRole);
+      }, 30 * 1000);
+    };
+
+    getUser();
+
+    // Proper cleanup
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+      if (pollInterval) {
+        clearInterval(pollInterval);
       }
     };
-    getUser();
   }, [router]);
 
   useEffect(() => { setIsSidebarOpen(false); }, [pathname]);
@@ -157,7 +210,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n));
   };
 
-  // REQUEST PERMISSION VIA DEFERRED SCRIPT
   const requestPushPermission = async () => {
     if (typeof window !== 'undefined') {
       (window as any).OneSignalDeferred = (window as any).OneSignalDeferred || [];
@@ -241,6 +293,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                 <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden">
                   <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between"><h3 className="font-bold">Alerts</h3><button onClick={() => setShowNotifications(false)}><X size={16}/></button></div>
                   <div className="max-h-100 overflow-y-auto">
+                    {notifications.length === 0 && <p className="p-4 text-center text-slate-500 text-sm">No notifications yet.</p>}
                     {notifications.map(n => (
                       <div key={n.id} onClick={() => { markAsRead(n.id); if (n.shipment_awb) router.push(`/dashboard/shipments/${n.shipment_awb}`); setShowNotifications(false); }} className={`p-4 border-b cursor-pointer hover:bg-slate-50 ${!n.is_read ? 'bg-indigo-50/50' : ''}`}>
                         <p className={`text-sm ${!n.is_read ? 'font-bold' : ''}`}>{n.title}</p>
