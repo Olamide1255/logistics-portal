@@ -163,6 +163,7 @@ export default function ShipmentDetails() {
         shipment_type: editFormData.shipment_type,
         service_type: editFormData.service_type,
         agreed_amount: editFormData.agreed_amount ? parseFloat(editFormData.agreed_amount) : null,
+        rate: editFormData.rate ? parseFloat(editFormData.rate) : null,
         currency: editFormData.currency
       }).eq('id', shipment.id);
       await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: 'Details Edited', status_notes: 'Shipment info corrected.', updated_by_role: userRole, action_by_name: actionBy || userRole }]);
@@ -253,13 +254,19 @@ export default function ShipmentDetails() {
                   <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Shipment Type</label><select name="shipment_type" value={editFormData.shipment_type || 'Export'} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white"><option value="Export">Export</option><option value="Import">Import</option></select></div>
                   <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Service Type</label><select name="service_type" value={editFormData.service_type || 'DDP'} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white"><option value="DDP">DDP</option><option value="DAP">DAP</option><option value="D2P">D2P</option><option value="FOB">FOB</option><option value="EXW">EXW</option><option value="AFW">AFW</option></select></div>
                   {canSeeFinancials && (
-                    <div className="md:col-span-2">
-                      <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Agreed Amount</label>
-                      <div className="flex gap-2">
-                        <select name="currency" value={editFormData.currency || 'NGN'} onChange={handleEditChange} className="w-28 border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white font-semibold"><option value="NGN">NGN</option><option value="USD">USD</option></select>
-                        <input type="number" step="0.01" name="agreed_amount" value={editFormData.agreed_amount || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" />
+                    <>
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Rate</label>
+                        <input type="number" step="0.01" name="rate" value={editFormData.rate || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" />
                       </div>
-                    </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Agreed Amount</label>
+                        <div className="flex gap-2">
+                          <select name="currency" value={editFormData.currency || 'NGN'} onChange={handleEditChange} className="w-24 border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white font-semibold"><option value="NGN">NGN</option><option value="USD">USD</option></select>
+                          <input type="number" step="0.01" name="agreed_amount" value={editFormData.agreed_amount || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" />
+                        </div>
+                      </div>
+                    </>
                   )}
                   <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Commodity</label><input name="commodity_type" value={editFormData.commodity_type || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
                   <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Sender</label><input name="sender_details" value={editFormData.sender_details || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
@@ -277,13 +284,20 @@ export default function ShipmentDetails() {
                   <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Commodity</span> <span className="text-slate-900 font-semibold">{shipment.commodity_type}</span></div>
                   <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Weight / Dims</span> <span className="text-slate-900 font-semibold">{shipment.weight} kg / {shipment.dimensions}</span></div>
                   
-                  {/* FINANCIAL INFO - STRICTLY RESTRICTED */}
                   {canSeeFinancials && (
-                    <div className="md:col-span-2 bg-slate-50 p-4 rounded-xl border border-slate-200 mt-2">
-                      <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Agreed Amount</span>
-                      <span className="text-lg font-extrabold text-emerald-600">
-                        {shipment.currency || 'NGN'} {shipment.agreed_amount ? parseFloat(shipment.agreed_amount).toLocaleString() : '0.00'}
-                      </span>
+                    <div className="md:col-span-2 grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mt-2">
+                      <div>
+                        <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Rate</span>
+                        <span className="text-lg font-extrabold text-slate-800">
+                          {shipment.rate ? parseFloat(shipment.rate).toLocaleString() : '—'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Agreed Amount</span>
+                        <span className="text-lg font-extrabold text-emerald-600">
+                          {shipment.currency || 'NGN'} {shipment.agreed_amount ? parseFloat(shipment.agreed_amount).toLocaleString() : '0.00'}
+                        </span>
+                      </div>
                     </div>
                   )}
                 </>

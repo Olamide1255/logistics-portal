@@ -35,6 +35,7 @@ export default function RegisterShipment() {
     shipment_type: 'Export',
     service_type: 'DDP',
     agreed_amount: '',
+    rate: '',
     currency: 'NGN',
     sender_details: '',
     receiver_details: '',
@@ -93,6 +94,7 @@ export default function RegisterShipment() {
           shipment_type: formData.shipment_type,
           service_type: formData.service_type,
           agreed_amount: formData.agreed_amount ? parseFloat(formData.agreed_amount) : null,
+          rate: formData.rate ? parseFloat(formData.rate) : null,
           currency: formData.currency,
           sender_details: formData.sender_details,
           receiver_details: formData.receiver_details,
@@ -177,16 +179,21 @@ export default function RegisterShipment() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Rate</label>
+            <input type="number" step="0.01" name="rate" value={formData.rate} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 5.50" />
+          </div>
           <div>
             <label className="block text-sm font-bold text-slate-700 mb-1">Agreed Amount</label>
-            <div className="flex gap-2">
-              <select name="currency" value={formData.currency} onChange={handleChange} className="w-28 border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-semibold">
-                <option value="NGN">NGN</option>
-                <option value="USD">USD</option>
-              </select>
-              <input type="number" step="0.01" name="agreed_amount" value={formData.agreed_amount} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 150000" />
-            </div>
+            <input type="number" step="0.01" name="agreed_amount" value={formData.agreed_amount} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 150000" />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Currency</label>
+            <select name="currency" value={formData.currency} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white font-semibold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+              <option value="NGN">NGN</option>
+              <option value="USD">USD</option>
+            </select>
           </div>
         </div>
 
