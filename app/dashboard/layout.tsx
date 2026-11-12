@@ -43,7 +43,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     if (data) setNotifications(data);
   };
 
-  // 1. GET USER & SET ROLE
   useEffect(() => {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -74,11 +73,9 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     getUser();
   }, [router]);
 
-  // 2. REALTIME WEBSOCKET (Runs once userRole is known)
   useEffect(() => {
     if (userRole === 'Loading...' || !userId) return;
 
-    console.log(`Connecting Realtime for ${userRole}...`);
     const channel = supabase
       .channel(`notif-changes-${userId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
@@ -86,64 +83,49 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         
         setNotifications((prev) => prev.some(n => n.id === payload.new.id) ? prev : [payload.new, ...prev]);
         playNotificationSound();
+        
         toast(payload.new.title, { 
           description: payload.new.message, 
           duration: 10000, 
           action: { 
-          label: 'View', 
+            label: 'View', 
             onClick: () => { 
               if (payload.new.shipment_awb && payload.new.shipment_awb !== 'null') {
+                // FIXED LINK ENCODING HERE
                 router.push(`/dashboard/shipments/${encodeURIComponent(payload.new.shipment_awb.trim())}`); 
-              }
+              } 
             } 
-          }
+          } 
         });
       })
-      .subscribe((status) => {
-        console.log(`Realtime Status: ${status}`);
-      });
+      .subscribe();
 
-    return () => {
-      console.log("Disconnecting Realtime...");
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [userRole, userId, router]);
 
-  // 3. FALLBACK POLLING (Every 30 seconds - Bulletproof)
   useEffect(() => {
     if (userRole === 'Loading...') return;
-    
-    console.log("Starting 30s Notification Polling...");
-    const interval = setInterval(() => {
-      if (navigator.onLine) fetchNotifications(userRole);
-    }, 30 * 1000);
-
+    const interval = setInterval(() => { if (navigator.onLine) fetchNotifications(userRole); }, 30 * 1000);
     return () => clearInterval(interval);
   }, [userRole]);
 
-  // 4. VERSION CHECK (Every 15 seconds - Bulletproof)
   useEffect(() => {
-    console.log("Starting 15s Version Check...");
     let currentVersion = '';
-    
     const checkVersion = async () => {
       try {
         const res = await fetch('/api/version');
         const data = await res.json();
-        if (!currentVersion) {
-          currentVersion = data.version;
-        } else if (currentVersion !== data.version) {
+        if (!currentVersion) currentVersion = data.version;
+        else if (currentVersion !== data.version) {
           toast.info("New Update Available", { description: "Please refresh.", duration: Infinity, action: { label: 'Update', onClick: () => window.location.reload() } });
         }
       } catch (e) {}
     };
-
     checkVersion();
     const interval = setInterval(checkVersion, 15 * 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // 5. NETWORK STATUS
   useEffect(() => {
     setIsOnline(navigator.onLine);
     const handleOnline = () => { setIsOnline(true); processQueue(); toast.success("Connection restored."); };
@@ -195,7 +177,12 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         
         <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
           <Link href="/dashboard" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname === '/dashboard' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><LayoutDashboard size={18} /> Overview</Link>
-          {(userRole === 'Customer Service' || userRole === 'Super Admin') && (<Link href="/dashboard/register" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname === '/dashboard/register' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><PlusCircle size={18} /> Register</Link>)}
+          
+          {/* FREIGHT CAN NOW REGISTER */}
+          {(userRole === 'Customer Service' || userRole === 'Super Admin' || userRole === 'Freight') && (
+            <Link href="/dashboard/register" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname === '/dashboard/register' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><PlusCircle size={18} /> Register</Link>
+          )}
+          
           <Link href="/dashboard/shipments" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/shipments') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Package size={18} /> Shipments</Link>
           {(userRole === 'Finance' || userRole === 'Super Admin') && (<Link href="/dashboard/clients" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/clients') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Users size={18} /> Clients</Link>)}
         </nav>
@@ -222,12 +209,13 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                     {notifications.length === 0 && <p className="p-4 text-center text-slate-500 text-sm">No notifications.</p>}
                     {notifications.map(n => (
                       <div key={n.id} onClick={() => { 
-  markAsRead(n.id); 
-  if (n.shipment_awb && n.shipment_awb !== 'null') {
-    router.push(`/dashboard/shipments/${encodeURIComponent(n.shipment_awb.trim())}`); 
-  }
-  setShowNotifications(false); 
-}} className={`p-4 border-b cursor-pointer hover:bg-slate-50 ${!n.is_read ? 'bg-indigo-50/50' : ''}`}>
+                        markAsRead(n.id); 
+                        if (n.shipment_awb && n.shipment_awb !== 'null') {
+                          // FIXED LINK ENCODING HERE
+                          router.push(`/dashboard/shipments/${encodeURIComponent(n.shipment_awb.trim())}`); 
+                        }
+                        setShowNotifications(false); 
+                      }} className={`p-4 border-b cursor-pointer hover:bg-slate-50 ${!n.is_read ? 'bg-indigo-50/50' : ''}`}>
                         <p className={`text-sm ${!n.is_read ? 'font-bold' : ''}`}>{n.title}</p>
                         <p className="text-xs text-slate-500">{n.message}</p>
                       </div>

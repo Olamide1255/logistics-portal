@@ -10,45 +10,57 @@ export default function Dashboard() {
   const [queue, setQueue] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      let currentRole = 'Unknown';
-      if (user?.email) {
-        const prefix = user.email.split('@')[0].toLowerCase();
-        if (prefix.includes('admin') || prefix.includes('it')) currentRole = 'Super Admin';
-        else if (prefix.includes('finance')) currentRole = 'Finance';
-        else if (prefix.includes('cs') || prefix.includes('info')) currentRole = 'Customer Service';
-        else if (prefix.includes('rfs')) currentRole = 'RFS';
-        else if (prefix.includes('ops')) currentRole = 'Operations';
-        else if (prefix.includes('freight')) currentRole = 'Freight'; // NEW ROLE
-      }
-      setRole(currentRole);
+  const fetchDashboardData = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    let currentRole = 'Unknown';
+    if (user?.email) {
+      const prefix = user.email.split('@')[0].toLowerCase();
+      if (prefix.includes('admin') || prefix.includes('it')) currentRole = 'Super Admin';
+      else if (prefix.includes('finance')) currentRole = 'Finance';
+      else if (prefix.includes('cs') || prefix.includes('info')) currentRole = 'Customer Service';
+      else if (prefix.includes('rfs')) currentRole = 'RFS';
+      else if (prefix.includes('ops')) currentRole = 'Operations';
+      else if (prefix.includes('freight')) currentRole = 'Freight';
+    }
+    setRole(currentRole);
 
-      const { data } = await supabase.from('shipments').select('*, clients(client_name)').order('created_at', { ascending: false });
+    const { data } = await supabase.from('shipments').select('*, clients(client_name)').order('created_at', { ascending: false });
+    
+    if (data) {
+      setStats({
+        total: data.length,
+        pendingFinance: data.filter(s => s.payment_status === 'Pending').length,
+        pendingFreight: data.filter(s => s.payment_status === 'Approved' && s.current_status === 'Registered').length,
+        pendingRFS: data.filter(s => s.current_status === 'Booked').length,
+        pendingOps: data.filter(s => s.current_status === 'Picked Up' || s.current_status === 'Handed to Ops').length,
+      });
+
+      let filteredQueue = [];
+      if (currentRole === 'Finance') filteredQueue = data.filter(s => s.payment_status === 'Pending');
+      else if (currentRole === 'Freight') filteredQueue = data.filter(s => s.payment_status === 'Approved' && s.current_status === 'Registered');
+      else if (currentRole === 'RFS') filteredQueue = data.filter(s => s.current_status === 'Booked');
+      else if (currentRole === 'Operations') filteredQueue = data.filter(s => s.current_status === 'Picked Up' || s.current_status === 'Handed to Ops');
+      else if (currentRole === 'Customer Service') filteredQueue = data.filter(s => s.current_status !== 'Delivered');
+      else filteredQueue = data.filter(s => s.current_status !== 'Delivered');
       
-      if (data) {
-        setStats({
-          total: data.length,
-          pendingFinance: data.filter(s => s.payment_status === 'Pending').length,
-          pendingFreight: data.filter(s => s.payment_status === 'Approved' && s.current_status === 'Registered').length,
-          pendingRFS: data.filter(s => s.current_status === 'Booked').length,
-          pendingOps: data.filter(s => s.current_status === 'Picked Up' || s.current_status === 'Handed to Ops').length,
-        });
+      setQueue(filteredQueue);
+    }
+    setLoading(false);
+  };
 
-        let filteredQueue = [];
-        if (currentRole === 'Finance') filteredQueue = data.filter(s => s.payment_status === 'Pending');
-        else if (currentRole === 'Freight') filteredQueue = data.filter(s => s.payment_status === 'Approved' && s.current_status === 'Registered');
-        else if (currentRole === 'RFS') filteredQueue = data.filter(s => s.current_status === 'Booked');
-        else if (currentRole === 'Operations') filteredQueue = data.filter(s => s.current_status === 'Picked Up' || s.current_status === 'Handed to Ops');
-        else if (currentRole === 'Customer Service') filteredQueue = data.filter(s => s.current_status !== 'Delivered');
-        else filteredQueue = data.filter(s => s.current_status !== 'Delivered');
-        
-        setQueue(filteredQueue);
-      }
-      setLoading(false);
-    };
+  useEffect(() => {
     fetchDashboardData();
+
+    // REALTIME LISTENER FOR DASHBOARD
+    const channel = supabase
+      .channel('dashboard-shipments')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shipments' }, () => {
+        // Whenever ANY shipment changes, re-fetch the dashboard data instantly
+        fetchDashboardData();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   if (loading) return <div className="p-10 text-center text-slate-500 animate-pulse">Loading Dashboard...</div>;
@@ -112,13 +124,18 @@ export default function Dashboard() {
               {queue.length === 0 && (<tr><td colSpan={5} className="px-6 py-12 text-center text-slate-500"><CheckCircle className="mx-auto text-slate-300 mb-2" size={32}/>You're all caught up!</td></tr>)}
               {queue.map((item) => (
                 <tr key={item.id} className="hover:bg-slate-50/80 transition-colors group">
-                  <td className="px-6 py-4 whitespace-nowrap"><Link href={`/dashboard/shipments/${item.awb_number}`} className="font-bold text-indigo-600 hover:text-indigo-800">{item.awb_number}</Link></td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {/* Added encodeURIComponent to fix 404 errors from links */}
+                    <Link href={`/dashboard/shipments/${encodeURIComponent(item.awb_number.trim())}`} className="font-bold text-indigo-600 hover:text-indigo-800">{item.awb_number}</Link>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700 font-medium">{item.clients?.client_name}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold ring-1 ring-inset ${item.shipment_type === 'Import' ? 'bg-blue-50 text-blue-700 ring-blue-200' : 'bg-orange-50 text-orange-700 ring-orange-200'}`}>{item.shipment_type}</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap"><span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200">{item.current_status}</span></td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><Link href={`/dashboard/shipments/${item.awb_number}`} className="inline-flex items-center gap-1 text-slate-500 hover:text-indigo-600 group-hover:text-indigo-600 transition-colors">Process <ArrowRight size={14} /></Link></td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <Link href={`/dashboard/shipments/${encodeURIComponent(item.awb_number.trim())}`} className="inline-flex items-center gap-1 text-slate-500 hover:text-indigo-600 group-hover:text-indigo-600 transition-colors">Process <ArrowRight size={14} /></Link>
+                  </td>
                 </tr>
               ))}
             </tbody>

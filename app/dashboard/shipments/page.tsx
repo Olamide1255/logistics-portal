@@ -34,7 +34,8 @@ export default function ShipmentsList() {
 
   if (loading) return <div className="p-10 text-center text-slate-500 animate-pulse">Loading shipments...</div>;
 
-  const canCreateShipment = userRole === 'Super Admin' || userRole === 'Customer Service';
+  // FREIGHT CAN NOW SEE THE BUTTON
+  const canCreateShipment = userRole === 'Super Admin' || userRole === 'Customer Service' || userRole === 'Freight';
 
   return (
     <div className="space-y-6">
@@ -71,7 +72,7 @@ export default function ShipmentsList() {
               {shipments.length === 0 && (<tr><td colSpan={6} className="px-6 py-12 text-center text-slate-500">No shipments found.</td></tr>)}
               {shipments.map((shipment) => (
                 <tr key={shipment.id} className="hover:bg-slate-50/80 transition-colors group">
-                  <td className="px-6 py-4 whitespace-nowrap"><Link href={`/dashboard/shipments/${shipment.awb_number}`} className="font-bold text-indigo-600 hover:text-indigo-800">{shipment.awb_number}</Link></td>
+                  <td className="px-6 py-4 whitespace-nowrap"><Link href={`/dashboard/shipments/${encodeURIComponent(shipment.awb_number.trim())}`} className="font-bold text-indigo-600 hover:text-indigo-800">{shipment.awb_number}</Link></td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-800">{shipment.clients?.client_name || 'N/A'}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold ring-1 ring-inset ${shipment.shipment_type === 'Import' ? 'bg-blue-50 text-blue-700 ring-blue-200' : 'bg-orange-50 text-orange-700 ring-orange-200'}`}>
@@ -84,7 +85,7 @@ export default function ShipmentsList() {
                       <span className={`w-1.5 h-1.5 rounded-full ${shipment.current_status === 'Registered' ? 'bg-blue-500' : shipment.current_status === 'Booked' ? 'bg-indigo-500' : shipment.current_status === 'Finance Approved' ? 'bg-purple-500' : shipment.current_status === 'Handed to Airline' ? 'bg-emerald-500' : 'bg-slate-500'}`}></span> {shipment.current_status}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><Link href={`/dashboard/shipments/${shipment.awb_number}`} className="inline-flex items-center gap-1 text-slate-500 hover:text-indigo-600 group-hover:text-indigo-600 transition-colors">View Details</Link></td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><Link href={`/dashboard/shipments/${encodeURIComponent(shipment.awb_number.trim())}`} className="inline-flex items-center gap-1 text-slate-500 hover:text-indigo-600 group-hover:text-indigo-600 transition-colors">View Details</Link></td>
                 </tr>
               ))}
             </tbody>

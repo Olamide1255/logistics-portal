@@ -17,7 +17,8 @@ export default function RegisterShipment() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user?.email) {
         const prefix = user.email.split('@')[0].toLowerCase();
-        if (prefix.includes('admin') || prefix.includes('it') || prefix.includes('cs') || prefix.includes('info')) {
+        // FREIGHT ADDED TO AUTHORIZED ROLES
+        if (prefix.includes('admin') || prefix.includes('it') || prefix.includes('cs') || prefix.includes('info') || prefix.includes('freight')) {
           setIsAuthorized(true);
         } else {
           setIsAuthorized(false);
@@ -30,20 +31,9 @@ export default function RegisterShipment() {
   }, [router]);
 
   const initialFormState = {
-    awb_number: '',
-    client_name: '',
-    shipment_type: 'Export',
-    service_type: 'DDP',
-    agreed_amount: '',
-    rate: '',
-    currency: 'NGN',
-    sender_details: '',
-    receiver_details: '',
-    weight: '',
-    dimensions: '',
-    origin: '',
-    destination: '',
-    commodity_type: '',
+    awb_number: '', client_name: '', shipment_type: 'Export', service_type: 'DDP',
+    agreed_amount: '', rate: '', currency: 'NGN', sender_details: '',
+    receiver_details: '', weight: '', dimensions: '', origin: '', destination: '', commodity_type: '',
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -59,60 +49,35 @@ export default function RegisterShipment() {
     setSuccess('');
 
     try {
-      const { data: existingShipment } = await supabase
-        .from('shipments')
-        .select('awb_number')
-        .eq('awb_number', formData.awb_number)
-        .maybeSingle(); 
-
+      const { data: existingShipment } = await supabase.from('shipments').select('awb_number').eq('awb_number', formData.awb_number).maybeSingle(); 
       if (existingShipment) throw new Error('A shipment with this AWB Number already exists!');
 
       let clientId;
-      const { data: existingClient } = await supabase
-        .from('clients')
-        .select('id')
-        .ilike('client_name', formData.client_name) 
-        .maybeSingle(); 
-
+      const { data: existingClient } = await supabase.from('clients').select('id').ilike('client_name', formData.client_name).maybeSingle(); 
       if (existingClient) {
         clientId = existingClient.id;
       } else {
-        const { data: newClient, error: clientError } = await supabase
-          .from('clients')
-          .insert([{ client_name: formData.client_name }])
-          .select()
-          .single(); 
-        
+        const { data: newClient, error: clientError } = await supabase.from('clients').insert([{ client_name: formData.client_name }]).select().single(); 
         if (clientError) throw new Error(`Database Error: ${clientError.message}`); 
         clientId = newClient.id;
       }
 
       const { error: shipmentError } = await supabase.from('shipments').insert([
         {
-          awb_number: formData.awb_number,
-          client_id: clientId,
-          shipment_type: formData.shipment_type,
-          service_type: formData.service_type,
-          agreed_amount: formData.agreed_amount ? parseFloat(formData.agreed_amount) : null,
-          rate: formData.rate ? parseFloat(formData.rate) : null,
-          currency: formData.currency,
-          sender_details: formData.sender_details,
-          receiver_details: formData.receiver_details,
-          weight: parseFloat(formData.weight),
-          dimensions: formData.dimensions,
-          origin: formData.origin,
-          destination: formData.destination,
-          commodity_type: formData.commodity_type,
-          current_status: 'Registered',
-          payment_status: 'Pending',
+          awb_number: formData.awb_number, client_id: clientId, shipment_type: formData.shipment_type,
+          service_type: formData.service_type, agreed_amount: formData.agreed_amount ? parseFloat(formData.agreed_amount) : null,
+          rate: formData.rate ? parseFloat(formData.rate) : null, currency: formData.currency,
+          sender_details: formData.sender_details, receiver_details: formData.receiver_details,
+          weight: parseFloat(formData.weight), dimensions: formData.dimensions, origin: formData.origin,
+          destination: formData.destination, commodity_type: formData.commodity_type,
+          current_status: 'Registered', payment_status: 'Pending',
         }
       ]);
 
       if (shipmentError) throw shipmentError;
 
       await supabase.from('notifications').insert([{
-        role_target: 'Finance',
-        title: 'New Shipment Registered',
+        role_target: 'Finance', title: 'New Shipment Registered',
         message: `AWB ${formData.awb_number} (${formData.shipment_type}) is awaiting payment approval.`,
         shipment_awb: formData.awb_number
       }]);
@@ -135,7 +100,7 @@ export default function RegisterShipment() {
       <div className="flex flex-col items-center justify-center h-[60vh] text-center px-4">
         <div className="bg-red-50 p-6 rounded-full mb-6"><ShieldAlert size={48} className="text-red-500" /></div>
         <h1 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h1>
-        <p className="text-slate-500 max-w-md mb-6">Only Customer Service and Super Admins can register new shipments.</p>
+        <p className="text-slate-500 max-w-md mb-6">Only Customer Service, Freight, and Super Admins can register new shipments.</p>
         <Link href="/dashboard" className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-colors">Return to Dashboard</Link>
       </div>
     );
@@ -152,49 +117,20 @@ export default function RegisterShipment() {
       {success && <div className="bg-emerald-50 text-emerald-600 p-4 rounded-xl mb-6 border border-emerald-200 font-medium">{success}</div>}
 
       <form onSubmit={handleRegister} className="bg-white p-6 md:p-8 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
-        
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div><label className="block text-sm font-bold text-slate-700 mb-1">AWB Number *</label><input required name="awb_number" value={formData.awb_number} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 123-45678901" /></div>
           <div><label className="block text-sm font-bold text-slate-700 mb-1">Client Name *</label><input required name="client_name" value={formData.client_name} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. Acme Corp" /></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Shipment Type *</label>
-            <select required name="shipment_type" value={formData.shipment_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
-              <option value="Export">Export</option>
-              <option value="Import">Import</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Service Type *</label>
-            <select required name="service_type" value={formData.service_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
-              <option value="DDP">DDP</option>
-              <option value="DAP">DAP</option>
-              <option value="D2P">D2P</option>
-              <option value="FOB">FOB</option>
-              <option value="EXW">EXW</option>
-              <option value="AFW">AFW</option>
-            </select>
-          </div>
+          <div><label className="block text-sm font-bold text-slate-700 mb-1">Shipment Type *</label><select required name="shipment_type" value={formData.shipment_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"><option value="Export">Export</option><option value="Import">Import</option></select></div>
+          <div><label className="block text-sm font-bold text-slate-700 mb-1">Service Type *</label><select required name="service_type" value={formData.service_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"><option value="DDP">DDP</option><option value="DAP">DAP</option><option value="D2P">D2P</option><option value="FOB">FOB</option><option value="EXW">EXW</option><option value="AFW">AFW</option></select></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Rate</label>
-            <input type="number" step="0.01" name="rate" value={formData.rate} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 5.50" />
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Agreed Amount</label>
-            <input type="number" step="0.01" name="agreed_amount" value={formData.agreed_amount} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 150000" />
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Currency</label>
-            <select name="currency" value={formData.currency} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white font-semibold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
-              <option value="NGN">NGN</option>
-              <option value="USD">USD</option>
-            </select>
-          </div>
+          <div><label className="block text-sm font-bold text-slate-700 mb-1">Rate</label><input type="number" step="0.01" name="rate" value={formData.rate} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 5.50" /></div>
+          <div><label className="block text-sm font-bold text-slate-700 mb-1">Agreed Amount</label><input type="number" step="0.01" name="agreed_amount" value={formData.agreed_amount} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 150000" /></div>
+          <div><label className="block text-sm font-bold text-slate-700 mb-1">Currency</label><select name="currency" value={formData.currency} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white font-semibold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"><option value="NGN">NGN</option><option value="USD">USD</option></select></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
