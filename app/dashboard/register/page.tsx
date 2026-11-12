@@ -32,7 +32,10 @@ export default function RegisterShipment() {
   const initialFormState = {
     awb_number: '',
     client_name: '',
-    shipment_type: 'Export', // Default to Export
+    shipment_type: 'Export',
+    service_type: 'DDP',
+    agreed_amount: '',
+    currency: 'NGN',
     sender_details: '',
     receiver_details: '',
     weight: '',
@@ -87,7 +90,10 @@ export default function RegisterShipment() {
         {
           awb_number: formData.awb_number,
           client_id: clientId,
-          shipment_type: formData.shipment_type, // Save Import/Export
+          shipment_type: formData.shipment_type,
+          service_type: formData.service_type,
+          agreed_amount: formData.agreed_amount ? parseFloat(formData.agreed_amount) : null,
+          currency: formData.currency,
           sender_details: formData.sender_details,
           receiver_details: formData.receiver_details,
           weight: parseFloat(formData.weight),
@@ -102,7 +108,6 @@ export default function RegisterShipment() {
 
       if (shipmentError) throw shipmentError;
 
-      // Notify Finance
       await supabase.from('notifications').insert([{
         role_target: 'Finance',
         title: 'New Shipment Registered',
@@ -135,7 +140,7 @@ export default function RegisterShipment() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Register New Shipment</h1>
         <p className="text-slate-500 mt-1 font-medium">Enter the shipment details below. AWB numbers must be unique.</p>
@@ -146,21 +151,42 @@ export default function RegisterShipment() {
 
       <form onSubmit={handleRegister} className="bg-white p-6 md:p-8 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="md:col-span-1">
-            <label className="block text-sm font-bold text-slate-700 mb-1">AWB Number *</label>
-            <input required name="awb_number" value={formData.awb_number} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 123-45678901" />
-          </div>
-          <div className="md:col-span-1">
-            <label className="block text-sm font-bold text-slate-700 mb-1">Client Name *</label>
-            <input required name="client_name" value={formData.client_name} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. Acme Corp" />
-          </div>
-          <div className="md:col-span-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div><label className="block text-sm font-bold text-slate-700 mb-1">AWB Number *</label><input required name="awb_number" value={formData.awb_number} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 123-45678901" /></div>
+          <div><label className="block text-sm font-bold text-slate-700 mb-1">Client Name *</label><input required name="client_name" value={formData.client_name} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. Acme Corp" /></div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div>
             <label className="block text-sm font-bold text-slate-700 mb-1">Shipment Type *</label>
             <select required name="shipment_type" value={formData.shipment_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
               <option value="Export">Export</option>
               <option value="Import">Import</option>
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Service Type *</label>
+            <select required name="service_type" value={formData.service_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500">
+              <option value="DDP">DDP</option>
+              <option value="DAP">DAP</option>
+              <option value="D2P">D2P</option>
+              <option value="FOB">FOB</option>
+              <option value="EXW">EXW</option>
+              <option value="AFW">AFW</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+          <div>
+            <label className="block text-sm font-bold text-slate-700 mb-1">Agreed Amount</label>
+            <div className="flex gap-2">
+              <select name="currency" value={formData.currency} onChange={handleChange} className="w-28 border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-semibold">
+                <option value="NGN">NGN</option>
+                <option value="USD">USD</option>
+              </select>
+              <input type="number" step="0.01" name="agreed_amount" value={formData.agreed_amount} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 150000" />
+            </div>
           </div>
         </div>
 

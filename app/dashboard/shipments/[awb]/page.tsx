@@ -46,7 +46,7 @@ export default function ShipmentDetails() {
       else if (prefix.includes('cs') || prefix.includes('info')) role = 'Customer Service';
       else if (prefix.includes('rfs')) role = 'RFS';
       else if (prefix.includes('ops')) role = 'Operations';
-      else if (prefix.includes('freight')) role = 'Freight'; // NEW ROLE
+      else if (prefix.includes('freight')) role = 'Freight';
       setUserRole(role);
     }
 
@@ -96,28 +96,14 @@ export default function ShipmentDetails() {
     return () => { supabase.removeChannel(channel); };
   }, [shipment?.id]);
 
-  // --- FREIGHT BOOKING ACTION ---
   const handleFreightBooked = async () => {
     if (!actionBy) return alert('Please enter your name in the "Action By" field.');
     setIsSubmitting(true);
-
     try {
-      const { error } = await supabase.from('shipments').update({ current_status: 'Booked' }).eq('id', shipment.id);
-      if (error) throw error;
-
-      await supabase.from('shipment_timeline').insert([{
-        shipment_id: shipment.id, status_dropdown: 'Booked', status_notes: 'Freight space secured.', updated_by_role: userRole, action_by_name: actionBy
-      }]);
-
-      await supabase.from('notifications').insert([{
-        role_target: 'ALL',
-        title: 'Shipment Booked',
-        message: `Freight (${actionBy}) booked space for AWB ${shipment.awb_number}. Ready for RFS pickup.`,
-        shipment_awb: shipment.awb_number
-      }]);
-
-      setActionBy('');
-      await fetchData();
+      await supabase.from('shipments').update({ current_status: 'Booked' }).eq('id', shipment.id);
+      await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: 'Booked', status_notes: 'Freight space secured.', updated_by_role: userRole, action_by_name: actionBy }]);
+      await supabase.from('notifications').insert([{ role_target: 'ALL', title: 'Shipment Booked', message: `Freight (${actionBy}) booked space for AWB ${shipment.awb_number}. Ready for RFS pickup.`, shipment_awb: shipment.awb_number }]);
+      setActionBy(''); await fetchData();
     } catch (error) { alert("Error booking shipment."); } finally { setIsSubmitting(false); }
   };
 
@@ -125,7 +111,6 @@ export default function ShipmentDetails() {
     if (!newStatus) return alert('Please select a status.');
     if (!actionBy) return alert('Please enter your name.');
     setIsSubmitting(true);
-
     try {
       await supabase.from('shipments').update({ current_status: newStatus }).eq('id', shipment.id);
       await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: newStatus, status_notes: statusNotes, updated_by_role: userRole, action_by_name: actionBy }]);
@@ -168,7 +153,17 @@ export default function ShipmentDetails() {
     setIsSubmitting(true);
     try {
       await supabase.from('shipments').update({ 
-        sender_details: editFormData.sender_details, receiver_details: editFormData.receiver_details, weight: parseFloat(editFormData.weight), dimensions: editFormData.dimensions, origin: editFormData.origin, destination: editFormData.destination, commodity_type: editFormData.commodity_type, shipment_type: editFormData.shipment_type
+        sender_details: editFormData.sender_details, 
+        receiver_details: editFormData.receiver_details, 
+        weight: parseFloat(editFormData.weight), 
+        dimensions: editFormData.dimensions, 
+        origin: editFormData.origin, 
+        destination: editFormData.destination, 
+        commodity_type: editFormData.commodity_type, 
+        shipment_type: editFormData.shipment_type,
+        service_type: editFormData.service_type,
+        agreed_amount: editFormData.agreed_amount ? parseFloat(editFormData.agreed_amount) : null,
+        currency: editFormData.currency
       }).eq('id', shipment.id);
       await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: 'Details Edited', status_notes: 'Shipment info corrected.', updated_by_role: userRole, action_by_name: actionBy || userRole }]);
       setIsEditing(false); await fetchData();
@@ -181,23 +176,8 @@ export default function ShipmentDetails() {
     try {
       await supabase.from('shipments').update({ payment_status: 'Approved' }).eq('id', shipment.id).eq('payment_status', 'Pending'); 
       await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: 'Finance Approved', status_notes: 'Payment confirmed.', updated_by_role: userRole, action_by_name: actionBy }]);
-      
-      // Notify Freight team specifically
-      await supabase.from('notifications').insert([{ 
-        role_target: 'Freight', 
-        title: 'Action Needed: Book Shipment', 
-        message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}. Please book space.`, 
-        shipment_awb: shipment.awb_number 
-      }]);
-
-      // Also notify CS
-      await supabase.from('notifications').insert([{ 
-        role_target: 'Customer Service', 
-        title: 'Payment Approved', 
-        message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}. Awaiting Freight booking.`, 
-        shipment_awb: shipment.awb_number 
-      }]);
-
+      await supabase.from('notifications').insert([{ role_target: 'Freight', title: 'Action Needed: Book Shipment', message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}. Please book space.`, shipment_awb: shipment.awb_number }]);
+      await supabase.from('notifications').insert([{ role_target: 'Customer Service', title: 'Payment Approved', message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}. Awaiting Freight booking.`, shipment_awb: shipment.awb_number }]);
       setActionBy(''); await fetchData(); 
     } catch (error) { alert("Error."); } finally { setIsSubmitting(false); }
   };
@@ -206,6 +186,9 @@ export default function ShipmentDetails() {
   if (!shipment) return <div className="p-10 text-center text-red-500 font-bold">Shipment not found.</div>;
 
   const canEditOrDelete = userRole === 'Super Admin' || userRole === 'Customer Service';
+  
+  // STRICT ROLE CHECK FOR FINANCIALS
+  const canSeeFinancials = userRole === 'Super Admin' || userRole === 'Customer Service' || userRole === 'Finance' || userRole === 'Freight';
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -240,15 +223,17 @@ export default function ShipmentDetails() {
       <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm ring-1 ring-slate-200/60 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">AWB: {shipment.awb_number}</h1>
-          <div className="flex items-center gap-3 mt-1">
+          <div className="flex flex-wrap items-center gap-3 mt-2">
             <p className="text-slate-500 text-lg font-medium">Client: <span className="font-bold text-slate-800">{shipment.clients?.client_name}</span></p>
             <span className={`px-3 py-1 rounded-full text-xs font-bold ring-1 ring-inset flex items-center gap-1 ${shipment.shipment_type === 'Import' ? 'bg-blue-50 text-blue-700 ring-blue-200' : 'bg-orange-50 text-orange-700 ring-orange-200'}`}>
-              {shipment.shipment_type === 'Import' ? <Anchor size={12} /> : <Plane size={12} />}
-              {shipment.shipment_type}
+              {shipment.shipment_type === 'Import' ? <Anchor size={12} /> : <Plane size={12} />} {shipment.shipment_type}
+            </span>
+            <span className="px-3 py-1 rounded-full text-xs font-bold ring-1 ring-inset bg-slate-50 text-slate-700 ring-slate-200">
+              {shipment.service_type || 'DDP'}
             </span>
           </div>
         </div>
-        <div className="flex flex-row md:flex-col gap-2 md:items-end">
+        <div className="flex flex-col md:flex-row gap-2 md:items-center">
           <div className={`px-4 py-2 rounded-xl font-bold text-sm inline-flex items-center gap-2 ring-1 ring-inset ${shipment.payment_status === 'Approved' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-amber-200'}`}>
             <span className={`w-2 h-2 rounded-full ${shipment.payment_status === 'Approved' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span> Payment: {shipment.payment_status}
           </div>
@@ -265,7 +250,17 @@ export default function ShipmentDetails() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
               {isEditing && canEditOrDelete ? (
                 <>
-                  <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Shipment Type</label><select name="shipment_type" value={editFormData.shipment_type || 'Export'} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900"><option value="Export">Export</option><option value="Import">Import</option></select></div>
+                  <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Shipment Type</label><select name="shipment_type" value={editFormData.shipment_type || 'Export'} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white"><option value="Export">Export</option><option value="Import">Import</option></select></div>
+                  <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Service Type</label><select name="service_type" value={editFormData.service_type || 'DDP'} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white"><option value="DDP">DDP</option><option value="DAP">DAP</option><option value="D2P">D2P</option><option value="FOB">FOB</option><option value="EXW">EXW</option><option value="AFW">AFW</option></select></div>
+                  {canSeeFinancials && (
+                    <div className="md:col-span-2">
+                      <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Agreed Amount</label>
+                      <div className="flex gap-2">
+                        <select name="currency" value={editFormData.currency || 'NGN'} onChange={handleEditChange} className="w-28 border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white font-semibold"><option value="NGN">NGN</option><option value="USD">USD</option></select>
+                        <input type="number" step="0.01" name="agreed_amount" value={editFormData.agreed_amount || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" />
+                      </div>
+                    </div>
+                  )}
                   <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Commodity</label><input name="commodity_type" value={editFormData.commodity_type || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
                   <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Sender</label><input name="sender_details" value={editFormData.sender_details || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
                   <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Receiver</label><input name="receiver_details" value={editFormData.receiver_details || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
@@ -281,6 +276,16 @@ export default function ShipmentDetails() {
                   <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Destination</span> <span className="text-slate-900 font-semibold">{shipment.destination}</span></div>
                   <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Commodity</span> <span className="text-slate-900 font-semibold">{shipment.commodity_type}</span></div>
                   <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Weight / Dims</span> <span className="text-slate-900 font-semibold">{shipment.weight} kg / {shipment.dimensions}</span></div>
+                  
+                  {/* FINANCIAL INFO - STRICTLY RESTRICTED */}
+                  {canSeeFinancials && (
+                    <div className="md:col-span-2 bg-slate-50 p-4 rounded-xl border border-slate-200 mt-2">
+                      <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Agreed Amount</span>
+                      <span className="text-lg font-extrabold text-emerald-600">
+                        {shipment.currency || 'NGN'} {shipment.agreed_amount ? parseFloat(shipment.agreed_amount).toLocaleString() : '0.00'}
+                      </span>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -295,7 +300,6 @@ export default function ShipmentDetails() {
                 <input type="text" placeholder="e.g. John Doe" value={actionBy} onChange={e => setActionBy(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm" />
               </div>
 
-              {/* FINANCE APPROVAL */}
               {shipment.payment_status === 'Pending' && (userRole === 'Finance' || userRole === 'Super Admin') && (
                 <div className="mb-6 p-4 bg-white border border-amber-200 rounded-xl shadow-sm">
                   <p className="text-amber-700 font-bold mb-3 flex items-center gap-2"><Clock size={18}/> Awaiting Finance Approval</p>
@@ -305,7 +309,6 @@ export default function ShipmentDetails() {
                 </div>
               )}
 
-              {/* FREIGHT BOOKING */}
               {shipment.payment_status === 'Approved' && shipment.current_status === 'Registered' && (userRole === 'Freight' || userRole === 'Super Admin') && (
                 <div className="mb-6 p-4 bg-white border border-blue-200 rounded-xl shadow-sm">
                   <p className="text-blue-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Awaiting Freight Booking</p>
@@ -315,7 +318,6 @@ export default function ShipmentDetails() {
                 </div>
               )}
 
-              {/* STATUS UPDATE (For RFS, Ops, Admin) */}
               {!((shipment.payment_status === 'Pending' && userRole === 'Finance') || (shipment.current_status === 'Registered' && userRole === 'Freight')) && (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
