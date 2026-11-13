@@ -39,7 +39,7 @@ export default function ShipmentsList() {
     setLoading(true);
     
     let query = supabase
-      .from('shipments')
+      .from('shipments_secure')
       .select(`*, clients!inner (client_name)`)
       .order('created_at', { ascending: false });
 

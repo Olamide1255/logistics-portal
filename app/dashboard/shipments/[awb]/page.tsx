@@ -2,10 +2,12 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams, useRouter } from 'next/navigation';
-import { CheckCircle, Clock, MessageSquare, Send, ArrowLeft, Edit, Trash2, Save, X, WifiOff, Plane, Anchor, Paperclip, Upload, FileText } from 'lucide-react';
+import { CheckCircle, Clock, MessageSquare, Send, ArrowLeft, Edit, Trash2, Save, X, WifiOff, Plane, Anchor, Paperclip, Upload, FileText, Download } from 'lucide-react';
 import Link from 'next/link';
 import { queueAction, processQueue } from '@/lib/offlineSync';
 import { toast } from 'sonner';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function ShipmentDetails() {
   const params = useParams();
@@ -45,8 +47,9 @@ export default function ShipmentDetails() {
       setUserRole(profile?.role || 'Unknown');
     }
 
+    // FETCH FROM THE SECURE VIEW INSTEAD OF THE TABLE
     const { data: shipData, error } = await supabase
-      .from('shipments')
+      .from('shipments_secure')
       .select(`*, clients (client_name)`)
       .ilike('awb_number', awb)
       .single();
@@ -97,6 +100,61 @@ export default function ShipmentDetails() {
     return () => { supabase.removeChannel(channel); };
   }, [shipment?.id]);
 
+  const generatePDF = () => {
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setFontSize(20);
+    doc.setTextColor(79, 70, 229); // Indigo
+    doc.text("MARCHLOG LOGISTICS", 14, 22);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text("Official Shipment Manifest", 14, 28);
+    
+    // Shipment Details
+    doc.setFontSize(12);
+    doc.setTextColor(0);
+    doc.text(`AWB Number: ${shipment.awb_number}`, 14, 45);
+    doc.text(`Client: ${shipment.clients?.client_name}`, 14, 52);
+    doc.text(`Type: ${shipment.shipment_type} (${shipment.service_type})`, 14, 59);
+    
+    // Table Data
+    const tableData = [
+      ["Sender", shipment.sender_details],
+      ["Receiver", shipment.receiver_details],
+      ["Origin", shipment.origin],
+      ["Destination", shipment.destination],
+      ["Commodity", shipment.commodity_type],
+      ["Weight / Dims", `${shipment.weight} kg / ${shipment.dimensions}`],
+    ];
+
+    autoTable(doc, {
+      startY: 70,
+      head: [['Field', 'Details']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [79, 70, 229] },
+    });
+
+    // Financials (Only print if they exist in the view)
+    if (shipment.agreed_amount) {
+      autoTable(doc, {
+        startY: (doc as any).lastAutoTable.finalY + 10,
+        head: [['Financials', 'Amount']],
+        body: [
+          ["Rate", shipment.rate || '—'],
+          ["Agreed Amount", `${shipment.currency} ${shipment.agreed_amount.toLocaleString()}`]
+        ],
+        theme: 'grid',
+        headStyles: { fillColor: [16, 185, 129] }, // Emerald
+      });
+    }
+
+    // Save PDF
+    doc.save(`Manifest_${shipment.awb_number}.pdf`);
+    toast.success("PDF Downloaded successfully");
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -104,16 +162,13 @@ export default function ShipmentDetails() {
 
     setUploading(true);
     try {
-      // 1. Upload to Storage
       const fileExt = file.name.split('.').pop();
       const fileName = `${shipment.id}/${Date.now()}.${fileExt}`;
       const { error: uploadError } = await supabase.storage.from('shipment-documents').upload(fileName, file);
       if (uploadError) throw uploadError;
 
-      // 2. Get Public URL (or authenticated URL)
       const { data: urlData } = supabase.storage.from('shipment-documents').getPublicUrl(fileName);
 
-      // 3. Save to Database
       const { error: dbError } = await supabase.from('shipment_documents').insert([{
         shipment_id: shipment.id,
         file_name: file.name,
@@ -127,7 +182,7 @@ export default function ShipmentDetails() {
       alert("Error uploading file: " + error.message);
     } finally {
       setUploading(false);
-      e.target.value = ''; // Reset input
+      e.target.value = ''; 
     }
   };
 
@@ -237,21 +292,26 @@ export default function ShipmentDetails() {
           <Link href="/dashboard/shipments" className="text-slate-400 hover:text-slate-800 transition-colors p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft size={20} /></Link>
           <h1 className="text-sm font-semibold text-slate-500 uppercase tracking-widest hidden md:block">Back to Shipments</h1>
         </div>
-        {canEditOrDelete && (
-          <div className="flex gap-2">
-            {!isEditing ? (
-              <>
-                <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"><Edit size={16} /> Edit</button>
-                <button onClick={handleDelete} disabled={isSubmitting} className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 px-4 py-2 rounded-xl hover:bg-red-100 transition-colors shadow-sm font-medium text-sm"><Trash2 size={16} /> Delete</button>
-              </>
-            ) : (
-              <>
-                <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"><X size={16} /> Cancel</button>
-                <button onClick={handleSaveEdit} disabled={isSubmitting} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-600/20 font-medium text-sm"><Save size={16} /> Save</button>
-              </>
-            )}
-          </div>
-        )}
+        <div className="flex gap-2">
+          <button onClick={generatePDF} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-md font-medium text-sm">
+            <Download size={16} /> Download Manifest
+          </button>
+          {canEditOrDelete && (
+            <>
+              {!isEditing ? (
+                <>
+                  <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"><Edit size={16} /> Edit</button>
+                  <button onClick={handleDelete} disabled={isSubmitting} className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 px-4 py-2 rounded-xl hover:bg-red-100 transition-colors shadow-sm font-medium text-sm"><Trash2 size={16} /> Delete</button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"><X size={16} /> Cancel</button>
+                  <button onClick={handleSaveEdit} disabled={isSubmitting} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-600/20 font-medium text-sm"><Save size={16} /> Save</button>
+                </>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm ring-1 ring-slate-200/60 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -371,7 +431,6 @@ export default function ShipmentDetails() {
                 )}
               </div>
 
-              {/* NEW DOCUMENTS SECTION */}
               <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
                 <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2"><Paperclip size={20} className="text-indigo-500"/> Documents & Attachments</h2>
                 
