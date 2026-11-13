@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Package, PlusCircle, LogOut, LayoutDashboard, Menu, X, Bell, BellRing, Users, WifiOff, Plane } from 'lucide-react';
+import { Package, PlusCircle, LogOut, LayoutDashboard, Menu, X, Bell, BellRing, Users, WifiOff, Plane, Settings } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { processQueue } from '@/lib/offlineSync';
 
@@ -51,14 +51,9 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       setEmail(user.email || '');
       setUserId(user.id);
       
-      const prefix = user.email?.split('@')[0].toLowerCase();
-      let role = 'Unknown';
-      if (prefix?.includes('admin') || prefix?.includes('it')) role = 'Super Admin';
-      else if (prefix?.includes('finance')) role = 'Finance';
-      else if (prefix?.includes('cs') || prefix?.includes('info')) role = 'Customer Service'; 
-      else if (prefix?.includes('rfs')) role = 'RFS';
-      else if (prefix?.includes('ops')) role = 'Operations';
-      else if (prefix?.includes('freight')) role = 'Freight';
+      // FETCH ROLE FROM DATABASE (Instead of email prefix)
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+      let role = profile?.role || 'Unknown';
       setUserRole(role);
 
       if (typeof window !== 'undefined') {
@@ -91,7 +86,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             label: 'View', 
             onClick: () => { 
               if (payload.new.shipment_awb && payload.new.shipment_awb !== 'null') {
-                // FIXED LINK ENCODING HERE
                 router.push(`/dashboard/shipments/${encodeURIComponent(payload.new.shipment_awb.trim())}`); 
               } 
             } 
@@ -178,13 +172,23 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
           <Link href="/dashboard" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname === '/dashboard' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><LayoutDashboard size={18} /> Overview</Link>
           
-          {/* FREIGHT CAN NOW REGISTER */}
           {(userRole === 'Customer Service' || userRole === 'Super Admin' || userRole === 'Freight') && (
             <Link href="/dashboard/register" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname === '/dashboard/register' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><PlusCircle size={18} /> Register</Link>
           )}
           
           <Link href="/dashboard/shipments" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/shipments') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Package size={18} /> Shipments</Link>
-          {(userRole === 'Finance' || userRole === 'Super Admin') && (<Link href="/dashboard/clients" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/clients') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Users size={18} /> Clients</Link>)}
+          
+          {(userRole === 'Finance' || userRole === 'Super Admin') && (
+            <Link href="/dashboard/clients" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/clients') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Users size={18} /> Clients</Link>
+          )}
+
+          {/* ADMIN LINK */}
+          {userRole === 'Super Admin' && (
+            <>
+              <p className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 mt-6">Admin</p>
+              <Link href="/dashboard/admin" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/admin') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Settings size={18} /> User Management</Link>
+            </>
+          )}
         </nav>
         <div className="p-4 border-t border-slate-100">
           <button onClick={handleLogout} className="flex items-center justify-center gap-2 p-2.5 w-full text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl font-medium text-sm"><LogOut size={16} /> Sign out</button>
@@ -211,7 +215,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                       <div key={n.id} onClick={() => { 
                         markAsRead(n.id); 
                         if (n.shipment_awb && n.shipment_awb !== 'null') {
-                          // FIXED LINK ENCODING HERE
                           router.push(`/dashboard/shipments/${encodeURIComponent(n.shipment_awb.trim())}`); 
                         }
                         setShowNotifications(false); 

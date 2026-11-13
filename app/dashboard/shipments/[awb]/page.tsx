@@ -40,16 +40,9 @@ export default function ShipmentDetails() {
     if (navigator.onLine) processQueue();
 
     const { data: { user } } = await supabase.auth.getUser();
-    if (user?.email) {
-      const prefix = user.email.split('@')[0].toLowerCase();
-      let role = 'Unknown';
-      if (prefix.includes('admin') || prefix.includes('it')) role = 'Super Admin';
-      else if (prefix.includes('finance')) role = 'Finance';
-      else if (prefix.includes('cs') || prefix.includes('info')) role = 'Customer Service';
-      else if (prefix.includes('rfs')) role = 'RFS';
-      else if (prefix.includes('ops')) role = 'Operations';
-      else if (prefix.includes('freight')) role = 'Freight';
-      setUserRole(role);
+    if (user) {
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+      setUserRole(profile?.role || 'Unknown');
     }
 
     const { data: shipData, error } = await supabase

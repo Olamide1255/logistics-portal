@@ -11,18 +11,13 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   const fetchDashboardData = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    let currentRole = 'Unknown';
-    if (user?.email) {
-      const prefix = user.email.split('@')[0].toLowerCase();
-      if (prefix.includes('admin') || prefix.includes('it')) currentRole = 'Super Admin';
-      else if (prefix.includes('finance')) currentRole = 'Finance';
-      else if (prefix.includes('cs') || prefix.includes('info')) currentRole = 'Customer Service';
-      else if (prefix.includes('rfs')) currentRole = 'RFS';
-      else if (prefix.includes('ops')) currentRole = 'Operations';
-      else if (prefix.includes('freight')) currentRole = 'Freight';
-    }
-    setRole(currentRole);
+          const { data: { user } } = await supabase.auth.getUser();
+      let currentRole = 'Unknown';
+      if (user) {
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+        currentRole = profile?.role || 'Unknown';
+      }
+      setRole(currentRole);
 
     const { data } = await supabase.from('shipments').select('*, clients(client_name)').order('created_at', { ascending: false });
     
