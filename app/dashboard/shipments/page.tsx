@@ -2,15 +2,22 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { Plus, Search, Plane, Anchor } from 'lucide-react';
+import { Plus, Search, Plane, Anchor, Loader2 } from 'lucide-react';
 
 export default function ShipmentsList() {
   const [shipments, setShipments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>('');
+  
+  // Search & Pagination State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const PAGE_SIZE = 15;
 
+  // Fetch User Role
   useEffect(() => {
-    const fetchData = async () => {
+    const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user?.email) {
         const prefix = user.email.split('@')[0].toLowerCase();
@@ -23,18 +30,58 @@ export default function ShipmentsList() {
         else if (prefix.includes('freight')) role = 'Freight';
         setUserRole(role);
       }
-
-      const { data, error } = await supabase.from('shipments').select(`*, clients (client_name)`).order('created_at', { ascending: false });
-      if (data) setShipments(data);
-      if (error) console.error(error);
-      setLoading(false);
     };
-    fetchData();
+    getUser();
   }, []);
 
-  if (loading) return <div className="p-10 text-center text-slate-500 animate-pulse">Loading shipments...</div>;
+  // Fetch Data (Server-side search and pagination)
+  const fetchShipments = async (currentPage: number, search: string) => {
+    setLoading(true);
+    
+    let query = supabase
+      .from('shipments')
+      .select(`*, clients!inner (client_name)`)
+      .order('created_at', { ascending: false });
 
-  // FREIGHT CAN NOW SEE THE BUTTON
+    // Apply Search (AWB or Client Name)
+    if (search) {
+      query = query.or(`awb_number.ilike.%${search}%,clients.client_name.ilike.%${search}%`);
+    }
+
+    // Apply Pagination (from -> to)
+    const from = currentPage * PAGE_SIZE;
+    const to = from + PAGE_SIZE - 1;
+    query = query.range(from, to);
+
+    const { data, error } = await query;
+    
+    if (data) {
+      if (currentPage === 0) {
+        setShipments(data);
+      } else {
+        setShipments((prev) => [...prev, ...data]);
+      }
+      setHasMore(data.length === PAGE_SIZE);
+    }
+    if (error) console.error(error);
+    setLoading(false);
+  };
+
+  // Debounce search input so it doesn't query on every keystroke
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      setPage(0);
+      fetchShipments(0, searchTerm);
+    }, 500);
+    return () => clearTimeout(delayDebounceFn);
+  }, [searchTerm]);
+
+  const loadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchShipments(nextPage, searchTerm);
+  };
+
   const canCreateShipment = userRole === 'Super Admin' || userRole === 'Customer Service' || userRole === 'Freight';
 
   return (
@@ -53,7 +100,13 @@ export default function ShipmentsList() {
         <div className="p-4 border-b border-slate-100 flex items-center gap-4 bg-white">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input type="text" placeholder="Search AWB or Client..." className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" />
+            <input 
+              type="text" 
+              placeholder="Search AWB or Client..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" 
+            />
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -69,7 +122,9 @@ export default function ShipmentsList() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-100">
-              {shipments.length === 0 && (<tr><td colSpan={6} className="px-6 py-12 text-center text-slate-500">No shipments found.</td></tr>)}
+              {shipments.length === 0 && !loading && (
+                <tr><td colSpan={6} className="px-6 py-12 text-center text-slate-500">No shipments found matching your search.</td></tr>
+              )}
               {shipments.map((shipment) => (
                 <tr key={shipment.id} className="hover:bg-slate-50/80 transition-colors group">
                   <td className="px-6 py-4 whitespace-nowrap"><Link href={`/dashboard/shipments/${encodeURIComponent(shipment.awb_number.trim())}`} className="font-bold text-indigo-600 hover:text-indigo-800">{shipment.awb_number}</Link></td>
@@ -91,6 +146,15 @@ export default function ShipmentsList() {
             </tbody>
           </table>
         </div>
+        
+        {/* PAGINATION / LOAD MORE */}
+        {hasMore && (
+          <div className="p-4 border-t border-slate-100 flex justify-center bg-slate-50">
+            <button onClick={loadMore} disabled={loading} className="flex items-center gap-2 text-indigo-600 font-semibold hover:text-indigo-800 px-4 py-2 rounded-lg hover:bg-indigo-50 transition-colors">
+              {loading ? <><Loader2 className="animate-spin" size={18} /> Loading...</> : 'Load More Shipments'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
