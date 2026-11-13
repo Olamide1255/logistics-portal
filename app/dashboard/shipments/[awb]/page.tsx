@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams, useRouter } from 'next/navigation';
-import { CheckCircle, Clock, MessageSquare, Send, ArrowLeft, Edit, Trash2, Save, X, WifiOff, Plane, Anchor } from 'lucide-react';
+import { CheckCircle, Clock, MessageSquare, Send, ArrowLeft, Edit, Trash2, Save, X, WifiOff, Plane, Anchor, Paperclip, Upload, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { queueAction, processQueue } from '@/lib/offlineSync';
 import { toast } from 'sonner';
@@ -17,9 +17,11 @@ export default function ShipmentDetails() {
   const [shipment, setShipment] = useState<any>(null);
   const [timeline, setTimeline] = useState<any[]>([]);
   const [comments, setComments] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>('');
   const [isOnline, setIsOnline] = useState(true);
+  const [uploading, setUploading] = useState(false);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
@@ -67,6 +69,9 @@ export default function ShipmentDetails() {
 
       const { data: commData } = await supabase.from('shipment_comments').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: true });
       setComments(commData || []);
+
+      const { data: docData } = await supabase.from('shipment_documents').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false });
+      setDocuments(docData || []);
     }
     setLoading(false);
   };
@@ -90,11 +95,48 @@ export default function ShipmentDetails() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shipment_timeline', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
         setTimeline((prev) => prev.some(t => t.id === payload.new.id) ? prev : [payload.new, ...prev.filter(t => !t.isOptimistic)]);
       })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shipment_documents', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
+        setDocuments((prev) => [payload.new, ...prev]);
+      })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'shipments', filter: `id=eq.${shipment.id}` }, (payload) => {
         setShipment((prev: any) => ({ ...prev, ...payload.new }));
       }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [shipment?.id]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!actionBy) return alert('Please enter your name in the "Action By" field before uploading.');
+
+    setUploading(true);
+    try {
+      // 1. Upload to Storage
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${shipment.id}/${Date.now()}.${fileExt}`;
+      const { error: uploadError } = await supabase.storage.from('shipment-documents').upload(fileName, file);
+      if (uploadError) throw uploadError;
+
+      // 2. Get Public URL (or authenticated URL)
+      const { data: urlData } = supabase.storage.from('shipment-documents').getPublicUrl(fileName);
+
+      // 3. Save to Database
+      const { error: dbError } = await supabase.from('shipment_documents').insert([{
+        shipment_id: shipment.id,
+        file_name: file.name,
+        file_url: urlData.publicUrl,
+        uploaded_by: actionBy
+      }]);
+      if (dbError) throw dbError;
+
+      toast.success("Document uploaded successfully!");
+    } catch (error: any) {
+      alert("Error uploading file: " + error.message);
+    } finally {
+      setUploading(false);
+      e.target.value = ''; // Reset input
+    }
+  };
 
   const handleFreightBooked = async () => {
     if (!actionBy) return alert('Please enter your name in the "Action By" field.');
@@ -187,8 +229,6 @@ export default function ShipmentDetails() {
   if (!shipment) return <div className="p-10 text-center text-red-500 font-bold">Shipment not found.</div>;
 
   const canEditOrDelete = userRole === 'Super Admin' || userRole === 'Customer Service';
-  
-  // STRICT ROLE CHECK FOR FINANCIALS
   const canSeeFinancials = userRole === 'Super Admin' || userRole === 'Customer Service' || userRole === 'Finance' || userRole === 'Freight';
 
   return (
@@ -255,17 +295,8 @@ export default function ShipmentDetails() {
                   <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Service Type</label><select name="service_type" value={editFormData.service_type || 'DDP'} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white"><option value="DDP">DDP</option><option value="DAP">DAP</option><option value="D2P">D2P</option><option value="FOB">FOB</option><option value="EXW">EXW</option><option value="AFW">AFW</option></select></div>
                   {canSeeFinancials && (
                     <>
-                      <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Rate</label>
-                        <input type="number" step="0.01" name="rate" value={editFormData.rate || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Agreed Amount</label>
-                        <div className="flex gap-2">
-                          <select name="currency" value={editFormData.currency || 'NGN'} onChange={handleEditChange} className="w-24 border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white font-semibold"><option value="NGN">NGN</option><option value="USD">USD</option></select>
-                          <input type="number" step="0.01" name="agreed_amount" value={editFormData.agreed_amount || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" />
-                        </div>
-                      </div>
+                      <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Rate</label><input type="number" step="0.01" name="rate" value={editFormData.rate || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
+                      <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Agreed Amount</label><div className="flex gap-2"><select name="currency" value={editFormData.currency || 'NGN'} onChange={handleEditChange} className="w-24 border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white font-semibold"><option value="NGN">NGN</option><option value="USD">USD</option></select><input type="number" step="0.01" name="agreed_amount" value={editFormData.agreed_amount || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div></div>
                     </>
                   )}
                   <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Commodity</label><input name="commodity_type" value={editFormData.commodity_type || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
@@ -286,18 +317,8 @@ export default function ShipmentDetails() {
                   
                   {canSeeFinancials && (
                     <div className="md:col-span-2 grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mt-2">
-                      <div>
-                        <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Rate</span>
-                        <span className="text-lg font-extrabold text-slate-800">
-                          {shipment.rate ? parseFloat(shipment.rate).toLocaleString() : '—'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-xs font-bold text-slate-500 uppercase block mb-1">Agreed Amount</span>
-                        <span className="text-lg font-extrabold text-emerald-600">
-                          {shipment.currency || 'NGN'} {shipment.agreed_amount ? parseFloat(shipment.agreed_amount).toLocaleString() : '0.00'}
-                        </span>
-                      </div>
+                      <div><span className="text-xs font-bold text-slate-500 uppercase block mb-1">Rate</span><span className="text-lg font-extrabold text-slate-800">{shipment.rate ? parseFloat(shipment.rate).toLocaleString() : '—'}</span></div>
+                      <div><span className="text-xs font-bold text-slate-500 uppercase block mb-1">Agreed Amount</span><span className="text-lg font-extrabold text-emerald-600">{shipment.currency || 'NGN'} {shipment.agreed_amount ? parseFloat(shipment.agreed_amount).toLocaleString() : '0.00'}</span></div>
                     </div>
                   )}
                 </>
@@ -306,55 +327,86 @@ export default function ShipmentDetails() {
           </div>
 
           {!isEditing && (
-            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-inner">
-              <h2 className="text-lg font-bold text-slate-900 mb-4">Action Panel</h2>
-              
-              <div className="mb-6">
-                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Action By (Your Name) *</label>
-                <input type="text" placeholder="e.g. John Doe" value={actionBy} onChange={e => setActionBy(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm" />
+            <>
+              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-inner">
+                <h2 className="text-lg font-bold text-slate-900 mb-4">Action Panel</h2>
+                
+                <div className="mb-6">
+                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Action By (Your Name) *</label>
+                  <input type="text" placeholder="e.g. John Doe" value={actionBy} onChange={e => setActionBy(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm" />
+                </div>
+
+                {shipment.payment_status === 'Pending' && (userRole === 'Finance' || userRole === 'Super Admin') && (
+                  <div className="mb-6 p-4 bg-white border border-amber-200 rounded-xl shadow-sm">
+                    <p className="text-amber-700 font-bold mb-3 flex items-center gap-2"><Clock size={18}/> Awaiting Finance Approval</p>
+                    <button onClick={handleApprovePayment} disabled={isSubmitting} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-emerald-700 flex items-center gap-2 transition-all shadow-md">
+                      <CheckCircle size={18} /> {isSubmitting ? 'Processing...' : 'Approve Payment'}
+                    </button>
+                  </div>
+                )}
+
+                {shipment.payment_status === 'Approved' && shipment.current_status === 'Registered' && (userRole === 'Freight' || userRole === 'Super Admin') && (
+                  <div className="mb-6 p-4 bg-white border border-blue-200 rounded-xl shadow-sm">
+                    <p className="text-blue-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Awaiting Freight Booking</p>
+                    <button onClick={handleFreightBooked} disabled={isSubmitting} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-blue-700 flex items-center gap-2 transition-all shadow-md">
+                      <CheckCircle size={18} /> {isSubmitting ? 'Processing...' : 'Mark as Booked'}
+                    </button>
+                  </div>
+                )}
+
+                {!((shipment.payment_status === 'Pending' && userRole === 'Finance') || (shipment.current_status === 'Registered' && userRole === 'Freight')) && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">New Status</label>
+                        <select value={newStatus} onChange={e => setNewStatus(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm">
+                          <option value="">Select Status...</option>
+                          {(userRole === 'RFS' || userRole === 'Super Admin') && (<><option value="Picked Up">Picked Up (RFS)</option><option value="Handed to Ops">Handed to Ops</option><option value="Delivered">Delivered (Local)</option></>)}
+                          {(userRole === 'Operations' || userRole === 'Super Admin') && (<><option value="Export Cleared">Export/Import Cleared (Ops)</option><option value="Handed to Airline">Handed to Airline</option></>)}
+                          {userRole === 'Super Admin' && <option value="Delivered">Mark as Delivered</option>}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Additional Notes</label>
+                        <input type="text" placeholder="Optional details..." value={statusNotes} onChange={e => setStatusNotes(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm" />
+                      </div>
+                    </div>
+                    <button onClick={handleUpdateStatus} disabled={isSubmitting} className="mt-4 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md">
+                      {isSubmitting ? 'Updating...' : 'Update Status'}
+                    </button>
+                  </>
+                )}
               </div>
 
-              {shipment.payment_status === 'Pending' && (userRole === 'Finance' || userRole === 'Super Admin') && (
-                <div className="mb-6 p-4 bg-white border border-amber-200 rounded-xl shadow-sm">
-                  <p className="text-amber-700 font-bold mb-3 flex items-center gap-2"><Clock size={18}/> Awaiting Finance Approval</p>
-                  <button onClick={handleApprovePayment} disabled={isSubmitting} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-emerald-700 flex items-center gap-2 transition-all shadow-md">
-                    <CheckCircle size={18} /> {isSubmitting ? 'Processing...' : 'Approve Payment'}
-                  </button>
+              {/* NEW DOCUMENTS SECTION */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
+                <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2"><Paperclip size={20} className="text-indigo-500"/> Documents & Attachments</h2>
+                
+                <div className="mb-6 p-4 bg-slate-50 border border-slate-200 rounded-xl border-dashed flex flex-col items-center justify-center text-center">
+                  <Upload className="text-slate-400 mb-2" size={32} />
+                  <p className="text-sm text-slate-600 font-medium mb-2">Upload proof of pickup, customs forms, or invoices.</p>
+                  <input type="file" id="file-upload" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+                  <label htmlFor="file-upload" className={`cursor-pointer bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-semibold shadow-sm hover:bg-slate-50 transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    {uploading ? 'Uploading...' : 'Select File to Upload'}
+                  </label>
                 </div>
-              )}
 
-              {shipment.payment_status === 'Approved' && shipment.current_status === 'Registered' && (userRole === 'Freight' || userRole === 'Super Admin') && (
-                <div className="mb-6 p-4 bg-white border border-blue-200 rounded-xl shadow-sm">
-                  <p className="text-blue-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Awaiting Freight Booking</p>
-                  <button onClick={handleFreightBooked} disabled={isSubmitting} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-blue-700 flex items-center gap-2 transition-all shadow-md">
-                    <CheckCircle size={18} /> {isSubmitting ? 'Processing...' : 'Mark as Booked'}
-                  </button>
+                <div className="space-y-3">
+                  {documents.length === 0 && <p className="text-slate-500 text-sm italic">No documents uploaded yet.</p>}
+                  {documents.map((doc) => (
+                    <a key={doc.id} href={doc.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-200 transition-colors group">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><FileText size={20} /></div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800 group-hover:text-indigo-700">{doc.file_name}</p>
+                          <p className="text-xs text-slate-500">Uploaded by {doc.uploaded_by} on {new Date(doc.created_at).toLocaleDateString()}</p>
+                        </div>
+                      </div>
+                    </a>
+                  ))}
                 </div>
-              )}
-
-              {!((shipment.payment_status === 'Pending' && userRole === 'Finance') || (shipment.current_status === 'Registered' && userRole === 'Freight')) && (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">New Status</label>
-                      <select value={newStatus} onChange={e => setNewStatus(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm">
-                        <option value="">Select Status...</option>
-                        {(userRole === 'RFS' || userRole === 'Super Admin') && (<><option value="Picked Up">Picked Up (RFS)</option><option value="Handed to Ops">Handed to Ops</option><option value="Delivered">Delivered (Local)</option></>)}
-                        {(userRole === 'Operations' || userRole === 'Super Admin') && (<><option value="Export Cleared">Export/Import Cleared (Ops)</option><option value="Handed to Airline">Handed to Airline</option></>)}
-                        {userRole === 'Super Admin' && <option value="Delivered">Mark as Delivered</option>}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Additional Notes</label>
-                      <input type="text" placeholder="Optional details..." value={statusNotes} onChange={e => setStatusNotes(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm" />
-                    </div>
-                  </div>
-                  <button onClick={handleUpdateStatus} disabled={isSubmitting} className="mt-4 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md">
-                    {isSubmitting ? 'Updating...' : 'Update Status'}
-                  </button>
-                </>
-              )}
-            </div>
+              </div>
+            </>
           )}
         </div>
 
