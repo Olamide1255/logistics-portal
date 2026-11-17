@@ -54,17 +54,36 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       setEmail(user.email || '');
       setUserId(user.id);
       
-      // FETCH PROFILE, ROLE, AND COMPANY INFO
-      const { data: profile } = await supabase.from('profiles').select('role, company_id, is_platform_admin').eq('id', user.id).single();
-      
+      // 1. Fetch Profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, company_id, is_platform_admin')
+        .eq('id', user.id)
+        .single();
+  
+        console.log("DEBUG - Profile:", profile); // <-- ADD THIS
+
+
       let role = profile?.role || 'Unknown';
       setUserRole(role);
       setIsPlatformAdmin(profile?.is_platform_admin || false);
 
-      // Fetch company branding
+      // 2. Fetch Company Separately (Avoids complex RLS join issues)
       if (profile?.company_id) {
-        const { data: comp } = await supabase.from('companies').select('name, logo_url').eq('id', profile.company_id).single();
+        const { data: comp } = await supabase
+          .from('companies')
+          .select('name, logo_url, status')
+          .eq('id', profile.company_id)
+          .single();
+          
         if (comp) {
+            console.log("DEBUG - Company:", comp); // <-- ADD THIS
+          if (comp.status === 'Suspended' && !profile.is_platform_admin) {
+            await supabase.auth.signOut();
+            alert("Your company account has been suspended. Please contact support.");
+            router.push('/login');
+            return;
+          }
           setCompanyInfo({ 
             name: comp.name || 'LogiFlow', 
             logo_url: comp.logo_url || '/icon-192.png' 

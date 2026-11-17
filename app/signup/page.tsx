@@ -20,9 +20,13 @@ export default function Signup() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
+      
       const data = await res.json();
       
-      if (!res.ok) throw new Error(data.error);
+      if (!res.ok) {
+        // Show the specific error from the API (rate limit, duplicate, validation, etc.)
+        throw new Error(data.error || 'Signup failed. Please try again.');
+      }
 
       toast.success("Workspace created! Redirecting to login...");
       setTimeout(() => router.push('/login'), 2000);

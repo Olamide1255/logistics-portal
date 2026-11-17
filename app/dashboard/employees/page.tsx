@@ -11,7 +11,6 @@ export default function EmployeeManagement() {
   const [companyId, setCompanyId] = useState<string>('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  // Invite Modal State
   const [showInvite, setShowInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('Customer Service');
@@ -22,8 +21,20 @@ export default function EmployeeManagement() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+    console.log('DEBUG: Logged in user ID:', user.id);
+    console.log('DEBUG: Logged in user email:', user.email);
+
+    // Fetch profile with more detailed logging
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
     
+    console.log('DEBUG: Profile data:', profile);
+    console.log('DEBUG: Profile error:', profileError);
+    console.log('DEBUG: Profile company_id:', profile?.company_id);
+
     if (profile?.role !== 'Super Admin' && !profile?.is_platform_admin) {
       setIsAuthorized(false);
       setLoading(false);
@@ -33,12 +44,18 @@ export default function EmployeeManagement() {
     setIsAuthorized(true);
     setCompanyId(profile.company_id);
 
-    const { data: emps } = await supabase
+    // Fetch employees with explicit logging
+    const { data: emps, error: empsError, count } = await supabase
       .from('profiles')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('company_id', profile.company_id)
       .order('email', { ascending: true });
     
+    console.log('DEBUG: Employees fetched:', emps?.length);
+    console.log('DEBUG: Employees list:', emps);
+    console.log('DEBUG: Employees error:', empsError);
+    console.log('DEBUG: Total count:', count);
+
     if (emps) setEmployees(emps);
     setLoading(false);
   };
@@ -76,7 +93,7 @@ export default function EmployeeManagement() {
       toast.success(`Invite sent to ${inviteEmail}!`);
       setShowInvite(false);
       setInviteEmail('');
-      fetchEmployees(); // Refresh list
+      fetchEmployees();
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -103,7 +120,6 @@ export default function EmployeeManagement() {
         </button>
       </div>
 
-      {/* INVITE MODAL */}
       {showInvite && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
@@ -146,7 +162,6 @@ export default function EmployeeManagement() {
         </div>
       )}
 
-      {/* TABLE (Same as before) */}
       <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
         <table className="min-w-full divide-y divide-slate-100">
           <thead className="bg-slate-50/50">
