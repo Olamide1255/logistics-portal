@@ -36,11 +36,13 @@ export default function Signup() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
       <Toaster position="top-right" richColors />
       <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
+        
         <div className="flex justify-center mb-6">
           <div className="bg-indigo-600 p-2 rounded-xl text-white shadow-md">
             <Package size={28} />
           </div>
         </div>
+        
         <h1 className="text-2xl font-bold text-center text-slate-900 mb-2">Create your Workspace</h1>
         <p className="text-center text-slate-500 text-sm mb-8">Set up your company on LogiFlow</p>
 
