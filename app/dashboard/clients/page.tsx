@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Users, Edit, Trash2, Save, X } from 'lucide-react';
+import { exportToCSV } from '@/lib/export';
+import { Users, Edit, Trash2, Save, X, Download } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
 export default function ClientReports() {
@@ -14,11 +15,12 @@ export default function ClientReports() {
   const [editName, setEditName] = useState<string>('');
 
   const fetchClients = async () => {
-    // Get User Role
+    // Get User Role securely from Database
     const { data: { user } } = await supabase.auth.getUser();
-    if (user?.email) {
-      const prefix = user.email.split('@')[0].toLowerCase();
-      if (prefix.includes('admin') || prefix.includes('it')) setUserRole('Super Admin');
+    if (user) {
+      // FIXED: Added is_platform_admin to the select query
+      const { data: profile } = await supabase.from('profiles').select('role, is_platform_admin').eq('id', user.id).single();
+      if (profile?.role === 'Super Admin' || profile?.is_platform_admin) setUserRole('Super Admin');
       else setUserRole('Other');
     }
 
@@ -45,6 +47,28 @@ export default function ClientReports() {
     fetchClients();
   }, []);
 
+  const handleExportCSV = () => {
+    if (clients.length === 0) return toast.error("No clients to export.");
+    
+    const csvData = clients.map(c => ({
+      name: c.client_name,
+      total: c.shipments?.length || 0,
+      approved: c.shipments?.filter((s: any) => s.payment_status === 'Approved').length || 0,
+      pending: c.shipments?.filter((s: any) => s.payment_status === 'Pending').length || 0,
+      joined: new Date(c.created_at).toLocaleDateString()
+    }));
+
+    exportToCSV(csvData, `LogiFlow_Clients_${new Date().toISOString().split('T')[0]}`, [
+      { key: 'name', label: 'Client Name' },
+      { key: 'total', label: 'Total Shipments' },
+      { key: 'approved', label: 'Approved (Paid)' },
+      { key: 'pending', label: 'Pending Payment' },
+      { key: 'joined', label: 'Date Joined' }
+    ]);
+    
+    toast.success("CSV Downloaded successfully!");
+  };
+
   const handleEditClick = (client: any) => {
     setEditingId(client.id);
     setEditName(client.client_name);
@@ -68,7 +92,6 @@ export default function ClientReports() {
   };
 
   const handleDelete = async (client: any) => {
-    // Check if client has shipments
     if (client.shipments && client.shipments.length > 0) {
       toast.error(`Cannot delete ${client.client_name}. They have ${client.shipments.length} shipment(s) on record. Delete the shipments first.`);
       return;
@@ -98,13 +121,22 @@ export default function ClientReports() {
     <div className="space-y-6">
       <Toaster position="top-right" richColors />
       
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Client Reports</h1>
           <p className="text-slate-500 mt-1 font-medium">Overview of all clients and their shipment history.</p>
         </div>
-        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl shadow-sm ring-1 ring-indigo-500/10">
-          <Users size={28} />
+        
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={handleExportCSV}
+            className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-slate-900 transition-colors shadow-md"
+          >
+            <Download size={18} /> Export CSV
+          </button>
+          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl shadow-sm ring-1 ring-indigo-500/10">
+            <Users size={24} />
+          </div>
         </div>
       </div>
 
@@ -118,12 +150,12 @@ export default function ClientReports() {
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Approved (Paid)</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Pending Payment</th>
                 <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Joined Date</th>
-                {/* Show Actions column ONLY if Super Admin */}
                 {isSuperAdmin && (
                   <th className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
                 )}
               </tr>
             </thead>
+
             <tbody className="bg-white divide-y divide-slate-100">
               {clients.length === 0 && (
                 <tr>
@@ -173,7 +205,6 @@ export default function ClientReports() {
                       {new Date(client.created_at).toLocaleDateString()}
                     </td>
                     
-                    {/* Show Action Buttons ONLY if Super Admin */}
                     {isSuperAdmin && (
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         {editingId !== client.id && (
