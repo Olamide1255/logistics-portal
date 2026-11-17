@@ -28,6 +28,7 @@ export default function LandingPage() {
             <Link href="/login" className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors">
               Log In
             </Link>
+            {/* FIXED: Changed href back to /signup */}
             <Link href="/signup" className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md hover:bg-indigo-700 transition-all">
               Get Started
             </Link>
