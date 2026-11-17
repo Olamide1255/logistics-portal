@@ -20,7 +20,8 @@ export default function CompanySettings() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      // Added is_platform_admin to the query to prevent TS errors
+      const { data: profile } = await supabase.from('profiles').select('role, company_id, is_platform_admin').eq('id', user.id).single();
       
       if (profile?.role !== 'Super Admin' && !profile?.is_platform_admin) {
         setIsAuthorized(false);
@@ -29,17 +30,21 @@ export default function CompanySettings() {
       }
 
       setIsAuthorized(true);
-      const { data: compData } = await supabase.from('companies').select('*').eq('id', profile.company_id).single();
       
-      if (compData) {
-        setCompany(compData);
-        setFormData({
-          name: compData.name || '',
-          email: compData.email || '',
-          phone: compData.phone || '',
-          address: compData.address || ''
-        });
+      if (profile?.company_id) {
+        const { data: compData } = await supabase.from('companies').select('*').eq('id', profile.company_id).single();
+        
+        if (compData) {
+          setCompany(compData);
+          setFormData({
+            name: compData.name || '',
+            email: compData.email || '',
+            phone: compData.phone || '',
+            address: compData.address || ''
+          });
+        }
       }
+      
       setLoading(false);
     };
     fetchCompany();
@@ -51,6 +56,8 @@ export default function CompanySettings() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!company) return toast.error("No company data loaded.");
+    
     setSaving(true);
     const { error } = await supabase.from('companies').update(formData).eq('id', company.id);
     
@@ -61,11 +68,10 @@ export default function CompanySettings() {
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !company) return;
 
     setUploading(true);
     try {
-      // We use the existing shipment-documents bucket for logos (or create a new one)
       const fileExt = file.name.split('.').pop();
       const fileName = `logos/${company.id}-${Date.now()}.${fileExt}`;
       
@@ -88,6 +94,9 @@ export default function CompanySettings() {
 
   if (loading) return <div className="p-10 text-center animate-pulse">Loading settings...</div>;
   if (!isAuthorized) return <div className="p-10 text-center text-red-500 font-bold flex items-center justify-center gap-2"><ShieldAlert/> Access Denied. Only Company Admins can view this.</div>;
+  
+  // If authorized but no company record was found
+  if (!company) return <div className="p-10 text-center text-amber-500 font-bold">No company record found for this account. Please contact the platform administrator.</div>;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -104,7 +113,8 @@ export default function CompanySettings() {
         <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60 h-fit flex flex-col items-center text-center">
           <h2 className="text-lg font-bold text-slate-900 mb-4">Company Logo</h2>
           <div className="w-32 h-32 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden mb-4 relative group">
-            {company.logo_url ? (
+            {/* FIXED: Using optional chaining here so it doesn't crash if company is null */}
+            {company?.logo_url ? (
               <img src={company.logo_url} alt="Logo" className="w-full h-full object-contain p-2" />
             ) : (
               <Upload className="text-slate-400" size={32} />
