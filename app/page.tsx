@@ -5,10 +5,9 @@ import Link from 'next/link';
 import { Package, ArrowRight, ShieldCheck, Zap, Globe, CheckCircle } from 'lucide-react';
 
 export default function LandingPage() {
-  // We start with a static year to prevent the build error
+  // Use state to prevent static generation errors
   const [year, setYear] = useState('2025');
 
-  // This runs only in the browser after the page loads
   useEffect(() => {
     setYear(new Date().getFullYear().toString());
   }, []);
