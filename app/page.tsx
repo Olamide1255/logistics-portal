@@ -5,9 +5,10 @@ import Link from 'next/link';
 import { Package, ArrowRight, ShieldCheck, Zap, Globe, CheckCircle } from 'lucide-react';
 
 export default function LandingPage() {
-  // Use state to prevent static generation errors
+  // Initialize with a static year to prevent build errors
   const [year, setYear] = useState('2025');
 
+  // Update to the actual year after the component mounts
   useEffect(() => {
     setYear(new Date().getFullYear().toString());
   }, []);
@@ -81,7 +82,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-8 text-center text-slate-500 text-sm font-medium">
+      <footer className="py-8 text-center text-slate-500 text-sm font-medium" suppressHydrationWarning>
         &copy; {year} LogiFlow SaaS. All rights reserved.
       </footer>
     </div>
