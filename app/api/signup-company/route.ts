@@ -5,14 +5,12 @@ export async function POST(req: Request) {
   try {
     const { companyName, email, password } = await req.json();
 
-    // 1. Setup Supabase Admin Client (using the Service Role Key)
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // 2. Create the Company
     const { data: company, error: companyError } = await supabaseAdmin
       .from('companies')
       .insert([{ name: companyName, status: 'Active' }])
@@ -21,7 +19,6 @@ export async function POST(req: Request) {
       
     if (companyError) throw companyError;
 
-    // 3. Create the Auth User (Auto-confirmed so they can log in instantly)
     const { data: user, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: email,
       password: password,
@@ -29,12 +26,10 @@ export async function POST(req: Request) {
     });
     
     if (authError) {
-      // Rollback: Delete the company if the user creation failed
       await supabaseAdmin.from('companies').delete().eq('id', company.id);
       throw authError;
     }
 
-    // 4. Create the Profile linked to the Company as Super Admin
     const { error: profileError } = await supabaseAdmin.from('profiles').insert([{
       id: user.user.id,
       email: email,
