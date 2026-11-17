@@ -30,7 +30,7 @@ export default function LandingPage() {
           <Zap size={14} /> The #1 Logistics Portal for Modern Teams
         </div>
         <h1 className="text-5xl md:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight mb-6">
-          Stop managing shipments on <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600">WhatsApp.</span>
+          Stop managing shipments on <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-600 to-purple-600">WhatsApp.</span>
         </h1>
         <p className="text-lg md:text-xl text-slate-500 mb-10 max-w-2xl mx-auto font-medium leading-relaxed">
           LogiFlow is the all-in-one platform for freight forwarders and clearing agents. Automate handovers, track payments, and manage your RFS and Operations teams from a single dashboard.
