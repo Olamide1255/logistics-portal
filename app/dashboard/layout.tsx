@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Package, PlusCircle, LogOut, LayoutDashboard, Menu, X, Bell, BellRing, Users, WifiOff, Plane, Settings } from 'lucide-react';
+import { Package, PlusCircle, LogOut, LayoutDashboard, Menu, X, Bell, BellRing, Users, WifiOff, Plane, Settings, ShieldCheck } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { processQueue } from '@/lib/offlineSync';
 
@@ -12,6 +12,9 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<string>('Loading...');
   const [email, setEmail] = useState<string>('');
   const [userId, setUserId] = useState<string>('');
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [companyInfo, setCompanyInfo] = useState({ name: 'LogiFlow', logo_url: '/icon-192.png' });
+  
   const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -51,10 +54,23 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       setEmail(user.email || '');
       setUserId(user.id);
       
-      // FETCH ROLE FROM DATABASE (Instead of email prefix)
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+      // FETCH PROFILE, ROLE, AND COMPANY INFO
+      const { data: profile } = await supabase.from('profiles').select('role, company_id, is_platform_admin').eq('id', user.id).single();
+      
       let role = profile?.role || 'Unknown';
       setUserRole(role);
+      setIsPlatformAdmin(profile?.is_platform_admin || false);
+
+      // Fetch company branding
+      if (profile?.company_id) {
+        const { data: comp } = await supabase.from('companies').select('name, logo_url').eq('id', profile.company_id).single();
+        if (comp) {
+          setCompanyInfo({ 
+            name: comp.name || 'LogiFlow', 
+            logo_url: comp.logo_url || '/icon-192.png' 
+          });
+        }
+      }
 
       if (typeof window !== 'undefined') {
         (window as any).OneSignalDeferred = (window as any).OneSignalDeferred || [];
@@ -160,10 +176,13 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200/60 flex flex-col transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)]`}>
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <img src="/icon-192.png" alt="Logo" className="w-10 h-10 rounded-xl shadow-md object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            <img src={companyInfo.logo_url} alt="Logo" className="w-10 h-10 rounded-xl shadow-md object-contain bg-white" onError={(e) => { e.currentTarget.src = '/icon-192.png'; }} />
             <div>
-              <h1 className="text-lg font-bold text-slate-900 tracking-tight">Marchlog</h1>
-              <p className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full inline-block mt-1">{userRole}</p>
+              <h1 className="text-lg font-bold text-slate-900 tracking-tight truncate max-w-37.5">{companyInfo.name}</h1>
+              <div className="flex items-center gap-1 mt-1">
+                <p className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full inline-block uppercase tracking-wider">{userRole}</p>
+                {isPlatformAdmin && <ShieldCheck size={14} className="text-emerald-500" />}
+              </div>
             </div>
           </div>
           <button className="md:hidden text-slate-400" onClick={() => setIsSidebarOpen(false)}><X size={20} /></button>
@@ -182,11 +201,20 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             <Link href="/dashboard/clients" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/clients') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Users size={18} /> Clients</Link>
           )}
 
-          {/* ADMIN LINK */}
-          {userRole === 'Super Admin' && (
+          {/* COMPANY ADMIN MENU */}
+          {(userRole === 'Super Admin' || isPlatformAdmin) && (
             <>
-              <p className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 mt-6">Admin</p>
-              <Link href="/dashboard/admin" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/admin') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Settings size={18} /> User Management</Link>
+              <p className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 mt-6">Company Admin</p>
+              <Link href="/dashboard/employees" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/employees') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Users size={18} /> Employees</Link>
+              <Link href="/dashboard/settings" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/settings') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Settings size={18} /> Company Settings</Link>
+            </>
+          )}
+
+          {/* PLATFORM ADMIN MENU */}
+          {isPlatformAdmin && (
+            <>
+              <p className="px-3 text-xs font-bold text-emerald-600 uppercase tracking-wider mb-2 mt-6">Platform Admin</p>
+              <Link href="/platform" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/platform') ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-100'}`}><ShieldCheck size={18} /> SaaS Dashboard</Link>
             </>
           )}
         </nav>
