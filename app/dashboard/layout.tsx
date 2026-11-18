@@ -213,22 +213,26 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
           <Link href="/dashboard" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname === '/dashboard' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><LayoutDashboard size={18} /> Overview</Link>
           
-          {(userRole === 'Customer Service' || userRole === 'Super Admin' || userRole === 'Freight') && (
-            <Link href="/dashboard/register" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname === '/dashboard/register' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><PlusCircle size={18} /> Register</Link>
-          )}
-          
-          <Link href="/dashboard/shipments" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/shipments') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Package size={18} /> Shipments</Link>
-          
-          {(userRole === 'Finance' || userRole === 'Super Admin') && (
-            <Link href="/dashboard/clients" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/clients') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Users size={18} /> Clients</Link>
-          )}
-
-          {/* COMPANY ADMIN MENU */}
-          {(userRole === 'Super Admin' || isPlatformAdmin) && (
+          {/* HIDE TENANT MENUS FOR PLATFORM ADMIN */}
+          {!isPlatformAdmin && (
             <>
-              <p className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 mt-6">Company Admin</p>
-              <Link href="/dashboard/employees" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/employees') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Users size={18} /> Employees</Link>
-              <Link href="/dashboard/settings" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/settings') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Settings size={18} /> Company Settings</Link>
+              {(userRole === 'Customer Service' || userRole === 'Super Admin' || userRole === 'Freight') && (
+                <Link href="/dashboard/register" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname === '/dashboard/register' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><PlusCircle size={18} /> Register</Link>
+              )}
+              
+              <Link href="/dashboard/shipments" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/shipments') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Package size={18} /> Shipments</Link>
+              
+              {(userRole === 'Finance' || userRole === 'Super Admin') && (
+                <Link href="/dashboard/clients" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/clients') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Users size={18} /> Clients</Link>
+              )}
+
+              {(userRole === 'Super Admin' || isPlatformAdmin) && (
+                <>
+                  <p className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 mt-6">Company Admin</p>
+                  <Link href="/dashboard/employees" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/employees') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Users size={18} /> Employees</Link>
+                  <Link href="/dashboard/settings" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/settings') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Settings size={18} /> Company Settings</Link>
+                </>
+              )}
             </>
           )}
 
@@ -240,6 +244,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             </>
           )}
         </nav>
+        
         <div className="p-4 border-t border-slate-100">
           <button onClick={handleLogout} className="flex items-center justify-center gap-2 p-2.5 w-full text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl font-medium text-sm"><LogOut size={16} /> Sign out</button>
         </div>

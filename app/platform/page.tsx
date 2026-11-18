@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { ShieldCheck, Plus, Building2, Loader2 } from 'lucide-react';
+import { ShieldCheck, Plus, Building2, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function PlatformAdmin() {
@@ -13,6 +13,7 @@ export default function PlatformAdmin() {
   const [newCompanyName, setNewCompanyName] = useState('');
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchPlatformData = async () => {
@@ -69,6 +70,29 @@ export default function PlatformAdmin() {
     }
   };
 
+  const handleDeleteCompany = async (companyId: string, companyName: string) => {
+    if (!window.confirm(`DANGER: Are you sure you want to delete "${companyName}" and ALL its users? This cannot be undone.`)) return;
+    
+    setDeletingId(companyId);
+    try {
+      const res = await fetch('/api/delete-company', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId })
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      
+      toast.success(`Company ${companyName} deleted.`);
+      setCompanies(companies.filter(c => c.id !== companyId));
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   if (loading) return <div className="p-10 text-center text-slate-500 animate-pulse">Verifying Platform Access...</div>;
   
   if (!isAuthorized) {
@@ -116,16 +140,27 @@ export default function PlatformAdmin() {
                 <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase">Company Name</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase">Joined</th>
+                <th className="px-6 py-3 text-right text-xs font-bold text-slate-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-100">
               {companies.map(c => (
-                <tr key={c.id} className="hover:bg-slate-50">
+                <tr key={c.id} className="hover:bg-slate-50 group">
                   <td className="px-6 py-4 font-bold text-slate-900">{c.name}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded-md text-xs font-bold ${c.status === 'Active' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{c.status}</span>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-500">{new Date(c.created_at).toLocaleDateString()}</td>
+                  <td className="px-6 py-4 text-right">
+                    <button 
+                      onClick={() => handleDeleteCompany(c.id, c.name)}
+                      disabled={deletingId === c.id}
+                      className="text-red-500 hover:bg-red-50 p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-100 disabled:cursor-wait"
+                      title="Delete Company & All Users"
+                    >
+                      {deletingId === c.id ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>

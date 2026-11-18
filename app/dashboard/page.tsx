@@ -2,22 +2,30 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { Package, Clock, CheckCircle, Truck, Plane, ArrowRight } from 'lucide-react';
+import { Package, Clock, CheckCircle, Truck, Plane, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export default function Dashboard() {
   const [role, setRole] = useState<string>('Loading...');
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [stats, setStats] = useState({ total: 0, pendingFinance: 0, pendingFreight: 0, pendingRFS: 0, pendingOps: 0 });
   const [queue, setQueue] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchDashboardData = async () => {
-          const { data: { user } } = await supabase.auth.getUser();
-      let currentRole = 'Unknown';
-      if (user) {
-        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-        currentRole = profile?.role || 'Unknown';
-      }
-      setRole(currentRole);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data: profile } = await supabase.from('profiles').select('role, is_platform_admin').eq('id', user.id).single();
+    
+    if (profile?.is_platform_admin) {
+      setIsPlatformAdmin(true);
+      setRole('Platform Admin');
+      setLoading(false);
+      return; // Stop here. Don't fetch shipments for Platform Admins.
+    }
+
+    let currentRole = profile?.role || 'Unknown';
+    setRole(currentRole);
 
     const { data } = await supabase.from('shipments_secure').select('*, clients(client_name)').order('created_at', { ascending: false });
     
@@ -46,11 +54,9 @@ export default function Dashboard() {
   useEffect(() => {
     fetchDashboardData();
 
-    // REALTIME LISTENER FOR DASHBOARD
     const channel = supabase
       .channel('dashboard-shipments')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shipments' }, () => {
-        // Whenever ANY shipment changes, re-fetch the dashboard data instantly
         fetchDashboardData();
       })
       .subscribe();
@@ -60,6 +66,26 @@ export default function Dashboard() {
 
   if (loading) return <div className="p-10 text-center text-slate-500 animate-pulse">Loading Dashboard...</div>;
 
+  // SPECIAL VIEW FOR PLATFORM ADMIN
+  if (isPlatformAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[70vh] text-center px-4">
+        <div className="bg-indigo-50 p-6 rounded-full mb-6">
+          <ShieldCheck size={48} className="text-indigo-600" />
+        </div>
+        <h1 className="text-3xl font-extrabold text-slate-900 mb-2">Welcome back, Platform Admin</h1>
+        <p className="text-slate-500 max-w-md mb-8 font-medium">
+          You are logged into the master platform account. You do not have a tenant shipment queue. 
+          Use the SaaS Dashboard to manage companies, subscriptions, and onboarding.
+        </p>
+        <Link href="/platform" className="bg-indigo-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg flex items-center gap-2">
+          Go to SaaS Dashboard <ArrowRight size={20} />
+        </Link>
+      </div>
+    );
+  }
+
+  // NORMAL TENANT VIEW
   return (
     <div className="space-y-8">
       <div>
@@ -119,18 +145,11 @@ export default function Dashboard() {
               {queue.length === 0 && (<tr><td colSpan={5} className="px-6 py-12 text-center text-slate-500"><CheckCircle className="mx-auto text-slate-300 mb-2" size={32}/>You're all caught up!</td></tr>)}
               {queue.map((item) => (
                 <tr key={item.id} className="hover:bg-slate-50/80 transition-colors group">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {/* Added encodeURIComponent to fix 404 errors from links */}
-                    <Link href={`/dashboard/shipments/${encodeURIComponent(item.awb_number.trim())}`} className="font-bold text-indigo-600 hover:text-indigo-800">{item.awb_number}</Link>
-                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap"><Link href={`/dashboard/shipments/${encodeURIComponent(item.awb_number.trim())}`} className="font-bold text-indigo-600 hover:text-indigo-800">{item.awb_number}</Link></td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700 font-medium">{item.clients?.client_name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold ring-1 ring-inset ${item.shipment_type === 'Import' ? 'bg-blue-50 text-blue-700 ring-blue-200' : 'bg-orange-50 text-orange-700 ring-orange-200'}`}>{item.shipment_type}</span>
-                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap"><span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold ring-1 ring-inset ${item.shipment_type === 'Import' ? 'bg-blue-50 text-blue-700 ring-blue-200' : 'bg-orange-50 text-orange-700 ring-orange-200'}`}>{item.shipment_type}</span></td>
                   <td className="px-6 py-4 whitespace-nowrap"><span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-200">{item.current_status}</span></td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <Link href={`/dashboard/shipments/${encodeURIComponent(item.awb_number.trim())}`} className="inline-flex items-center gap-1 text-slate-500 hover:text-indigo-600 group-hover:text-indigo-600 transition-colors">Process <ArrowRight size={14} /></Link>
-                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium"><Link href={`/dashboard/shipments/${encodeURIComponent(item.awb_number.trim())}`} className="inline-flex items-center gap-1 text-slate-500 hover:text-indigo-600 group-hover:text-indigo-600 transition-colors">Process <ArrowRight size={14} /></Link></td>
                 </tr>
               ))}
             </tbody>
