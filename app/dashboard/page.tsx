@@ -19,7 +19,7 @@ export default function Dashboard() {
       }
       setRole(currentRole);
 
-    const { data } = await supabase.from('shipments').select('*, clients(client_name)').order('created_at', { ascending: false });
+    const { data } = await supabase.from('shipments_secure').select('*, clients(client_name)').order('created_at', { ascending: false });
     
     if (data) {
       setStats({

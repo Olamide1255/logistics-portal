@@ -24,6 +24,7 @@ export default function ShipmentDetails() {
   const [userRole, setUserRole] = useState<string>('');
   const [isOnline, setIsOnline] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
 
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
@@ -94,11 +95,28 @@ export default function ShipmentDetails() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shipment_documents', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
         setDocuments((prev) => [payload.new, ...prev]);
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'shipments', filter: `id=eq.${shipment.id}` }, (payload) => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'shipments_secure', filter: `id=eq.${shipment.id}` }, (payload) => {
         setShipment((prev: any) => ({ ...prev, ...payload.new }));
       }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [shipment?.id]);
+
+  // Generate short-lived signed URLs for private documents
+  useEffect(() => {
+    const generateUrls = async () => {
+      const urls: Record<string, string> = {};
+      for (const doc of documents) {
+        if (doc.file_path) {
+          const { data } = await supabase.storage
+            .from('shipment-documents')
+            .createSignedUrl(doc.file_path, 3600); // 1 hour expiry
+          if (data?.signedUrl) urls[doc.id] = data.signedUrl;
+        }
+      }
+      setSignedUrls(urls);
+    };
+    if (documents.length > 0) generateUrls();
+  }, [documents]);
 
   const generatePDF = () => {
     const doc = new jsPDF();
@@ -162,27 +180,35 @@ export default function ShipmentDetails() {
 
     setUploading(true);
     try {
+      // Fetch user's company_id for the folder structure
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user!.id).single();
+      
       const fileExt = file.name.split('.').pop();
-      const fileName = `${shipment.id}/${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from('shipment-documents').upload(fileName, file);
+      // 🔒 Path must start with company_id for RLS to enforce isolation
+      const filePath = `${profile!.company_id}/${shipment.id}/${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage.from('shipment-documents').upload(filePath, file);
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage.from('shipment-documents').getPublicUrl(fileName);
-
+      // Save path (not public URL) to the database
       const { error: dbError } = await supabase.from('shipment_documents').insert([{
         shipment_id: shipment.id,
+        company_id: profile!.company_id,
         file_name: file.name,
-        file_url: urlData.publicUrl,
+        file_path: filePath,        // New: private path
+        file_url: null,             // No more public URLs
         uploaded_by: actionBy
       }]);
       if (dbError) throw dbError;
 
-      toast.success("Document uploaded successfully!");
+      toast.success("Document uploaded securely!");
+      await fetchData();
     } catch (error: any) {
-      alert("Error uploading file: " + error.message);
+      toast.error("Upload failed: " + error.message);
     } finally {
       setUploading(false);
-      e.target.value = ''; 
+      e.target.value = '';
     }
   };
 
@@ -190,7 +216,7 @@ export default function ShipmentDetails() {
     if (!actionBy) return alert('Please enter your name in the "Action By" field.');
     setIsSubmitting(true);
     try {
-      await supabase.from('shipments').update({ current_status: 'Booked' }).eq('id', shipment.id);
+      await supabase.from('shipments_secure').update({ current_status: 'Booked' }).eq('id', shipment.id);
       await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: 'Booked', status_notes: 'Freight space secured.', updated_by_role: userRole, action_by_name: actionBy }]);
       await supabase.from('notifications').insert([{ role_target: 'ALL', title: 'Shipment Booked', message: `Freight (${actionBy}) booked space for AWB ${shipment.awb_number}. Ready for RFS pickup.`, shipment_awb: shipment.awb_number }]);
       setActionBy(''); await fetchData();
@@ -202,7 +228,7 @@ export default function ShipmentDetails() {
     if (!actionBy) return alert('Please enter your name.');
     setIsSubmitting(true);
     try {
-      await supabase.from('shipments').update({ current_status: newStatus }).eq('id', shipment.id);
+      await supabase.from('shipments_secure').update({ current_status: newStatus }).eq('id', shipment.id);
       await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: newStatus, status_notes: statusNotes, updated_by_role: userRole, action_by_name: actionBy }]);
       await supabase.from('notifications').insert([{ role_target: 'ALL', title: `Shipment Update: ${newStatus}`, message: `${userRole} (${actionBy}) updated AWB ${shipment.awb_number} to: ${newStatus}.`, shipment_awb: shipment.awb_number }]);
       setNewStatus(''); setStatusNotes(''); setActionBy(''); await fetchData();
@@ -230,7 +256,7 @@ export default function ShipmentDetails() {
   const handleDelete = async () => {
     if (!window.confirm(`Delete shipment ${awb}?`)) return;
     setIsSubmitting(true);
-    await supabase.from('shipments').delete().eq('id', shipment.id);
+    await supabase.from('shipments_secure').delete().eq('id', shipment.id);
     await supabase.from('notifications').delete().eq('shipment_awb', shipment.awb_number);
     router.push('/dashboard/shipments'); router.refresh(); 
   };
@@ -242,7 +268,7 @@ export default function ShipmentDetails() {
   const handleSaveEdit = async () => {
     setIsSubmitting(true);
     try {
-      await supabase.from('shipments').update({ 
+      await supabase.from('shipments_secure').update({ 
         sender_details: editFormData.sender_details, 
         receiver_details: editFormData.receiver_details, 
         weight: parseFloat(editFormData.weight), 
@@ -265,7 +291,7 @@ export default function ShipmentDetails() {
     if (!actionBy) return alert('Please enter your name.');
     setIsSubmitting(true);
     try {
-      await supabase.from('shipments').update({ payment_status: 'Approved' }).eq('id', shipment.id).eq('payment_status', 'Pending'); 
+      await supabase.from('shipments_secure').update({ payment_status: 'Approved' }).eq('id', shipment.id).eq('payment_status', 'Pending'); 
       await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: 'Finance Approved', status_notes: 'Payment confirmed.', updated_by_role: userRole, action_by_name: actionBy }]);
       await supabase.from('notifications').insert([{ role_target: 'Freight', title: 'Action Needed: Book Shipment', message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}. Please book space.`, shipment_awb: shipment.awb_number }]);
       await supabase.from('notifications').insert([{ role_target: 'Customer Service', title: 'Payment Approved', message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}. Awaiting Freight booking.`, shipment_awb: shipment.awb_number }]);
@@ -445,17 +471,35 @@ export default function ShipmentDetails() {
 
                 <div className="space-y-3">
                   {documents.length === 0 && <p className="text-slate-500 text-sm italic">No documents uploaded yet.</p>}
-                  {documents.map((doc) => (
-                    <a key={doc.id} href={doc.file_url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-200 transition-colors group">
-                      <div className="flex items-center gap-3">
-                        <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><FileText size={20} /></div>
-                        <div>
-                          <p className="text-sm font-bold text-slate-800 group-hover:text-indigo-700">{doc.file_name}</p>
-                          <p className="text-xs text-slate-500">Uploaded by {doc.uploaded_by} on {new Date(doc.created_at).toLocaleDateString()}</p>
+                  {documents.map((doc) => {
+                    const signedUrl = signedUrls[doc.id];
+                    return (
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-200 transition-colors group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><FileText size={20} /></div>
+                          <div>
+                            <p className="text-sm font-bold text-slate-800 group-hover:text-indigo-700">{doc.file_name}</p>
+                            <p className="text-xs text-slate-500">Uploaded by {doc.uploaded_by} on {new Date(doc.created_at).toLocaleDateString()}</p>
+                          </div>
                         </div>
+                        {signedUrl ? (
+                          <a
+                            href={signedUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                          >
+                            <Download size={14} /> View
+                          </a>
+                        ) : (
+                          <span className="text-xs font-medium text-slate-400">Generating link…</span>
+                        )}
                       </div>
-                    </a>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </>

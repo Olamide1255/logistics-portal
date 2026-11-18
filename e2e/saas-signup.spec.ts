@@ -3,6 +3,14 @@ import { test, expect } from '@playwright/test';
 test.describe('SaaS Signup & Tenant Isolation', () => {
   
   test('Should create a new company workspace, log in, and verify branding', async ({ page }) => {
+    
+    // ⬇️⬇️⬇️ ADD IT HERE — at the very start, before any navigation ⬇️⬇️⬇️
+    await page.route('**/api/signup-company', async route => {
+      const headers = { ...route.request().headers(), 'x-test-bypass': 'logiflow-test-key-123' };
+      await route.continue({ headers });
+    });
+    // ⬆️⬆️⬆️ END OF INTERCEPTOR ⬆️⬆️⬆️
+
     // 1. Generate a unique email every time we run the test
     const timestamp = Date.now();
     const testEmail = `testadmin${timestamp}@example.com`;

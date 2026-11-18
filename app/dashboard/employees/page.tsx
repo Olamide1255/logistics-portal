@@ -81,10 +81,21 @@ export default function EmployeeManagement() {
     setIsInviting(true);
 
     try {
+      // Get the current session so we can send the auth token to the API
+      const { data: { session } } = await supabase.auth.getSession();
+
       const res = await fetch('/api/invite', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole, department: inviteDept, companyId })
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          email: inviteEmail,
+          role: inviteRole,
+          department: inviteDept,
+          companyId,
+        }),
       });
 
       const data = await res.json();

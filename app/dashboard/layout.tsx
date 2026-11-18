@@ -61,8 +61,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         .eq('id', user.id)
         .single();
   
-        console.log("DEBUG - Profile:", profile); // <-- ADD THIS
-
+      console.log("DEBUG - Profile:", profile);
 
       let role = profile?.role || 'Unknown';
       setUserRole(role);
@@ -77,7 +76,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           .single();
           
         if (comp) {
-            console.log("DEBUG - Company:", comp); // <-- ADD THIS
+          console.log("DEBUG - Company:", comp);
           if (comp.status === 'Suspended' && !profile.is_platform_admin) {
             await supabase.auth.signOut();
             alert("Your company account has been suspended. Please contact support.");
@@ -95,6 +94,10 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         (window as any).OneSignalDeferred = (window as any).OneSignalDeferred || [];
         (window as any).OneSignalDeferred.push(async function(OneSignal: any) {
           await OneSignal.User.addTag('role', role);
+          // 🔒 NEW: tag company_id so notifications can be scoped
+          if (profile?.company_id) {
+            await OneSignal.User.addTag('company_id', profile.company_id);
+          }
           if (Notification.permission === 'granted' || OneSignal.Notifications.permission) setPushEnabled(true);
         });
       }

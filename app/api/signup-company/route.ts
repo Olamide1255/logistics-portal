@@ -6,7 +6,7 @@ export async function POST(req: Request) {
   try {
     // 1. RATE LIMIT: Max 3 signups per IP per hour
     const ip = getClientIP(req);
-    const { success, remaining } = rateLimit(`signup_${ip}`, 3, 60 * 60 * 1000);
+      const { success, remaining } = rateLimit(`signup_${ip}`, 3, 60 * 60 * 1000, req);
     
     if (!success) {
       return NextResponse.json(
