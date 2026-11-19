@@ -255,7 +255,9 @@ export default function ShipmentDetails() {
       await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: newStatus, status_notes: statusNotes, updated_by_role: userRole, action_by_name: actionBy }]);
       await supabase.from('notifications').insert([{ role_target: 'ALL', title: `Shipment Update: ${newStatus}`, message: `${userRole} (${actionBy}) updated AWB ${shipment.awb_number} to: ${newStatus}.`, shipment_awb: shipment.awb_number }]);
       setNewStatus(''); setStatusNotes(''); setActionBy(''); await fetchData();
-    } catch (error) { alert("Error."); } finally { setIsSubmitting(false); }
+    } catch (error) { 
+      toast.error(error instanceof Error ? error.message : "Error updating status."); 
+    } finally { setIsSubmitting(false); }
   };
 
   const handleAddComment = async (e: React.FormEvent) => {
@@ -495,27 +497,66 @@ export default function ShipmentDetails() {
                   </div>
                 )}
 
-                {!((shipment.payment_status === 'Pending' && userRole === 'Finance') || (shipment.current_status === 'Registered' && userRole === 'Freight')) && (
-                  <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">New Status</label>
-                        <select value={newStatus} onChange={e => setNewStatus(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm">
-                          <option value="">Select Status...</option>
-                          {(userRole === 'RFS' || userRole === 'Super Admin') && (<><option value="Picked Up">Picked Up (RFS)</option><option value="Handed to Ops">Handed to Ops</option><option value="Delivered">Delivered (Local)</option></>)}
-                          {(userRole === 'Operations' || userRole === 'Super Admin') && (<><option value="Export Cleared">Export/Import Cleared (Ops)</option><option value="Handed to Airline">Handed to Airline</option></>)}
-                          {userRole === 'Super Admin' && <option value="Delivered">Mark as Delivered</option>}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Additional Notes</label>
-                        <input type="text" placeholder="Optional details..." value={statusNotes} onChange={e => setStatusNotes(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm" />
-                      </div>
+                {/* RFS SPECIFIC ACTIONS */}
+                {userRole === 'RFS' && shipment.current_status === 'Booked' && (
+                  <div className="mb-6 p-4 bg-white border border-blue-200 rounded-xl shadow-sm">
+                    <p className="text-blue-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Shipment Ready for Pickup</p>
+                    <div className="flex flex-col gap-2">
+                       <button onClick={() => { setNewStatus('Picked Up'); setStatusNotes('Picked up by RFS'); handleUpdateStatus(); }} disabled={isSubmitting} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700 w-full">Confirm Pickup</button>
                     </div>
-                    <button onClick={handleUpdateStatus} disabled={isSubmitting} className="mt-4 bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md">
-                      {isSubmitting ? 'Updating...' : 'Update Status'}
-                    </button>
-                  </>
+                  </div>
+                )}
+
+                {userRole === 'RFS' && shipment.current_status === 'Picked Up' && (
+                  <div className="mb-6 p-4 bg-white border border-purple-200 rounded-xl shadow-sm">
+                    <p className="text-purple-700 font-bold mb-3 flex items-center gap-2"><Anchor size={18}/> Routing Decision</p>
+                    <p className="text-xs text-slate-500 mb-3">Did you deliver this locally or are you handing it to Operations for export?</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setNewStatus('Delivered'); setStatusNotes('Delivered locally by RFS'); handleUpdateStatus(); }} disabled={isSubmitting} className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-700 w-1/2">Delivered (Local)</button>
+                      <button onClick={() => { setNewStatus('Handed to Ops'); setStatusNotes('Handed to Ops for export'); handleUpdateStatus(); }} disabled={isSubmitting} className="bg-purple-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-purple-700 w-1/2">Handover to Ops</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* OPS SPECIFIC ACTIONS */}
+                {userRole === 'Operations' && (shipment.current_status === 'Handed to Ops' || shipment.current_status === 'Export Cleared') && (
+                  <div className="mb-6 p-4 bg-white border border-amber-200 rounded-xl shadow-sm">
+                    <p className="text-amber-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Operations Processing</p>
+                    <div className="flex flex-col gap-2">
+                      {shipment.current_status === 'Handed to Ops' && (
+                        <button onClick={() => { setNewStatus('Export Cleared'); setStatusNotes('Customs/Export formalities cleared'); handleUpdateStatus(); }} disabled={isSubmitting} className="bg-amber-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-amber-700 w-full">Mark Export Cleared</button>
+                      )}
+                      <button onClick={() => { setNewStatus('Handed to Airline'); setStatusNotes('Handed over to Airline'); handleUpdateStatus(); }} disabled={isSubmitting} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-indigo-700 w-full">Handover to Airline</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* FALLBACK / ADMIN ACTION PANEL */}
+                {userRole === 'Super Admin' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Manual Override Status</label>
+                      <select value={newStatus} onChange={e => setNewStatus(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm">
+                        <option value="">Select Status...</option>
+                        <option value="Registered">Registered</option>
+                        <option value="Booked">Booked</option>
+                        <option value="Picked Up">Picked Up</option>
+                        <option value="Handed to Ops">Handed to Ops</option>
+                        <option value="Export Cleared">Export Cleared</option>
+                        <option value="Handed to Airline">Handed to Airline</option>
+                        <option value="Delivered">Delivered</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Additional Notes</label>
+                      <input type="text" placeholder="Optional details..." value={statusNotes} onChange={e => setStatusNotes(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <button onClick={handleUpdateStatus} disabled={isSubmitting} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md">
+                        {isSubmitting ? 'Updating...' : 'Force Update Status'}
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
 
