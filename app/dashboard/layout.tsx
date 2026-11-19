@@ -60,14 +60,12 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         .select('role, company_id, is_platform_admin')
         .eq('id', user.id)
         .single();
-  
-      console.log("DEBUG - Profile:", profile);
-
+      
       let role = profile?.role || 'Unknown';
       setUserRole(role);
       setIsPlatformAdmin(profile?.is_platform_admin || false);
 
-      // 2. Fetch Company Separately (Avoids complex RLS join issues)
+      // 2. Fetch Company Separately
       if (profile?.company_id) {
         const { data: comp } = await supabase
           .from('companies')
@@ -76,31 +74,47 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           .single();
           
         if (comp) {
-          console.log("DEBUG - Company:", comp);
           if (comp.status === 'Suspended' && !profile.is_platform_admin) {
             await supabase.auth.signOut();
             alert("Your company account has been suspended. Please contact support.");
             router.push('/login');
             return;
           }
+
+          let displayLogo = '/icon-192.png';
+          
+          if (comp.logo_url) {
+            if (comp.logo_url.startsWith('http')) {
+              // Legacy: Old public URL
+              displayLogo = comp.logo_url;
+            } else {
+              // New: File path, generate a Signed URL valid for 1 hour
+              const { data: signedData } = await supabase.storage.from('shipment-documents').createSignedUrl(comp.logo_url, 3600);
+              if (signedData?.signedUrl) {
+                displayLogo = signedData.signedUrl;
+              }
+            }
+          }
+
           setCompanyInfo({ 
             name: comp.name || 'LogiFlow', 
-            logo_url: comp.logo_url || '/icon-192.png' 
+            logo_url: displayLogo 
           });
         }
       }
 
+      // 3. OneSignal Tagging (Role + Company ID)
       if (typeof window !== 'undefined') {
         (window as any).OneSignalDeferred = (window as any).OneSignalDeferred || [];
         (window as any).OneSignalDeferred.push(async function(OneSignal: any) {
           await OneSignal.User.addTag('role', role);
-          // 🔒 NEW: tag company_id so notifications can be scoped
           if (profile?.company_id) {
             await OneSignal.User.addTag('company_id', profile.company_id);
           }
           if (Notification.permission === 'granted' || OneSignal.Notifications.permission) setPushEnabled(true);
         });
       }
+      
       await fetchNotifications(role);
     };
     getUser();

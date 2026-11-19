@@ -73,22 +73,27 @@ export default function CompanySettings() {
     setUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `logos/${company.id}-${Date.now()}.${fileExt}`;
       
-      const { error: uploadError } = await supabase.storage.from('shipment-documents').upload(fileName, file);
+      // 🔒 FIX: Path MUST start with company.id to pass the security policy
+      const filePath = `${company.id}/logo-${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage.from('shipment-documents').upload(filePath, file);
       if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage.from('shipment-documents').getPublicUrl(fileName);
-
-      const { error: updateError } = await supabase.from('companies').update({ logo_url: urlData.publicUrl }).eq('id', company.id);
+      // 🔒 FIX: Store the file PATH in the database, not the public URL
+      const { error: updateError } = await supabase.from('companies').update({ logo_url: filePath }).eq('id', company.id);
       if (updateError) throw updateError;
 
-      setCompany({ ...company, logo_url: urlData.publicUrl });
+      // Generate a secure Signed URL for immediate display (valid for 1 hour)
+      const { data: signedData } = await supabase.storage.from('shipment-documents').createSignedUrl(filePath, 3600);
+      
+      setCompany({ ...company, logo_url: signedData?.signedUrl || '' });
       toast.success("Logo updated successfully!");
     } catch (error: any) {
       toast.error("Error uploading logo: " + error.message);
     } finally {
       setUploading(false);
+      e.target.value = '';
     }
   };
 
