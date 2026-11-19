@@ -2,10 +2,10 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams, useRouter } from 'next/navigation';
-import { CheckCircle, Clock, MessageSquare, Send, ArrowLeft, Edit, Trash2, Save, X, WifiOff, Plane, Anchor, Paperclip, Upload, FileText, Download } from 'lucide-react';
+import { CheckCircle, Clock, MessageSquare, Send, ArrowLeft, Edit, Trash2, Save, X, WifiOff, Plane, Anchor, Paperclip, Upload, FileText, Download, DollarSign, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { queueAction, processQueue } from '@/lib/offlineSync';
-import { toast } from 'sonner';
+import { toast, Toaster } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -20,11 +20,11 @@ export default function ShipmentDetails() {
   const [timeline, setTimeline] = useState<any[]>([]);
   const [comments, setComments] = useState<any[]>([]);
   const [documents, setDocuments] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>('');
   const [isOnline, setIsOnline] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
 
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
@@ -37,6 +37,12 @@ export default function ShipmentDetails() {
   const [newComment, setNewComment] = useState('');
   const [commentBy, setCommentBy] = useState('');
 
+  // Payment Modal State
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('Bank Transfer');
+  const [paymentRef, setPaymentRef] = useState('');
+
   const fetchData = async () => {
     setLoading(true);
     setIsOnline(navigator.onLine);
@@ -48,7 +54,6 @@ export default function ShipmentDetails() {
       setUserRole(profile?.role || 'Unknown');
     }
 
-    // FETCH FROM THE SECURE VIEW INSTEAD OF THE TABLE
     const { data: shipData, error } = await supabase
       .from('shipments_secure')
       .select(`*, clients (client_name)`)
@@ -69,6 +74,9 @@ export default function ShipmentDetails() {
 
       const { data: docData } = await supabase.from('shipment_documents').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false });
       setDocuments(docData || []);
+
+      const { data: payData } = await supabase.from('payments').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false });
+      setPayments(payData || []);
     }
     setLoading(false);
   };
@@ -95,48 +103,103 @@ export default function ShipmentDetails() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shipment_documents', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
         setDocuments((prev) => [payload.new, ...prev]);
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'shipments_secure', filter: `id=eq.${shipment.id}` }, (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'payments', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
+        setPayments((prev) => [payload.new, ...prev]);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'shipments', filter: `id=eq.${shipment.id}` }, (payload) => {
         setShipment((prev: any) => ({ ...prev, ...payload.new }));
       }).subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [shipment?.id]);
 
-  // Generate short-lived signed URLs for private documents
-  useEffect(() => {
-    const generateUrls = async () => {
-      const urls: Record<string, string> = {};
-      for (const doc of documents) {
-        if (doc.file_path) {
-          const { data } = await supabase.storage
-            .from('shipment-documents')
-            .createSignedUrl(doc.file_path, 3600); // 1 hour expiry
-          if (data?.signedUrl) urls[doc.id] = data.signedUrl;
-        }
+  // Calculate Financials
+  const agreedAmount = parseFloat(shipment?.agreed_amount || '0');
+  const totalPaid = payments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+  const balance = agreedAmount - totalPaid;
+
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentAmount || !actionBy) return toast.error("Please enter amount and your name.");
+    setIsSubmitting(true);
+
+    try {
+      const { error } = await supabase.from('payments').insert([{
+        company_id: shipment.company_id,
+        shipment_id: shipment.id,
+        amount: parseFloat(paymentAmount),
+        currency: shipment.currency,
+        payment_method: paymentMethod,
+        reference: paymentRef,
+        recorded_by: actionBy
+      }]);
+      if (error) throw error;
+
+      // Auto-approve shipment if fully paid
+      if (totalPaid + parseFloat(paymentAmount) >= agreedAmount) {
+        await supabase.from('shipments').update({ payment_status: 'Approved' }).eq('id', shipment.id);
       }
-      setSignedUrls(urls);
-    };
-    if (documents.length > 0) generateUrls();
-  }, [documents]);
+
+      toast.success("Payment recorded successfully!");
+      setShowPaymentModal(false);
+      setPaymentAmount('');
+      setPaymentRef('');
+      await fetchData(); // Refresh ledger
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!actionBy) return alert('Please enter your name in the "Action By" field before uploading.');
+
+    setUploading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user!.id).single();
+      
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${profile!.company_id}/${shipment.id}/${Date.now()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage.from('shipment-documents').upload(filePath, file);
+      if (uploadError) throw uploadError;
+
+      const { error: dbError } = await supabase.from('shipment_documents').insert([{
+        shipment_id: shipment.id,
+        company_id: profile!.company_id,
+        file_name: file.name,
+        file_path: filePath,
+        uploaded_by: actionBy
+      }]);
+      if (dbError) throw dbError;
+
+      toast.success("Document uploaded securely!");
+    } catch (error: any) {
+      alert("Error uploading file: " + error.message);
+    } finally {
+      setUploading(false);
+      e.target.value = ''; 
+    }
+  };
 
   const generatePDF = () => {
     const doc = new jsPDF();
-    
-    // Header
     doc.setFontSize(20);
-    doc.setTextColor(79, 70, 229); // Indigo
+    doc.setTextColor(79, 70, 229); 
     doc.text("MARCHLOG LOGISTICS", 14, 22);
     doc.setFontSize(10);
     doc.setTextColor(100);
     doc.text("Official Shipment Manifest", 14, 28);
     
-    // Shipment Details
     doc.setFontSize(12);
     doc.setTextColor(0);
     doc.text(`AWB Number: ${shipment.awb_number}`, 14, 45);
     doc.text(`Client: ${shipment.clients?.client_name}`, 14, 52);
     doc.text(`Type: ${shipment.shipment_type} (${shipment.service_type})`, 14, 59);
     
-    // Table Data
     const tableData = [
       ["Sender", shipment.sender_details],
       ["Receiver", shipment.receiver_details],
@@ -154,69 +217,29 @@ export default function ShipmentDetails() {
       headStyles: { fillColor: [79, 70, 229] },
     });
 
-    // Financials (Only print if they exist in the view)
     if (shipment.agreed_amount) {
       autoTable(doc, {
         startY: (doc as any).lastAutoTable.finalY + 10,
         head: [['Financials', 'Amount']],
         body: [
-          ["Rate", shipment.rate || '—'],
-          ["Agreed Amount", `${shipment.currency} ${shipment.agreed_amount.toLocaleString()}`]
+          ["Agreed Amount", `${shipment.currency} ${agreedAmount.toLocaleString()}`],
+          ["Total Paid", `${shipment.currency} ${totalPaid.toLocaleString()}`],
+          ["Outstanding Balance", `${shipment.currency} ${balance.toLocaleString()}`]
         ],
         theme: 'grid',
-        headStyles: { fillColor: [16, 185, 129] }, // Emerald
+        headStyles: { fillColor: [16, 185, 129] }, 
       });
     }
 
-    // Save PDF
     doc.save(`Manifest_${shipment.awb_number}.pdf`);
     toast.success("PDF Downloaded successfully");
-  };
-
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!actionBy) return alert('Please enter your name in the "Action By" field before uploading.');
-
-    setUploading(true);
-    try {
-      // Fetch user's company_id for the folder structure
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user!.id).single();
-      
-      const fileExt = file.name.split('.').pop();
-      // 🔒 Path must start with company_id for RLS to enforce isolation
-      const filePath = `${profile!.company_id}/${shipment.id}/${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage.from('shipment-documents').upload(filePath, file);
-      if (uploadError) throw uploadError;
-
-      // Save path (not public URL) to the database
-      const { error: dbError } = await supabase.from('shipment_documents').insert([{
-        shipment_id: shipment.id,
-        company_id: profile!.company_id,
-        file_name: file.name,
-        file_path: filePath,        // New: private path
-        file_url: null,             // No more public URLs
-        uploaded_by: actionBy
-      }]);
-      if (dbError) throw dbError;
-
-      toast.success("Document uploaded securely!");
-      await fetchData();
-    } catch (error: any) {
-      toast.error("Upload failed: " + error.message);
-    } finally {
-      setUploading(false);
-      e.target.value = '';
-    }
   };
 
   const handleFreightBooked = async () => {
     if (!actionBy) return alert('Please enter your name in the "Action By" field.');
     setIsSubmitting(true);
     try {
-      await supabase.from('shipments_secure').update({ current_status: 'Booked' }).eq('id', shipment.id);
+      await supabase.from('shipments').update({ current_status: 'Booked' }).eq('id', shipment.id);
       await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: 'Booked', status_notes: 'Freight space secured.', updated_by_role: userRole, action_by_name: actionBy }]);
       await supabase.from('notifications').insert([{ role_target: 'ALL', title: 'Shipment Booked', message: `Freight (${actionBy}) booked space for AWB ${shipment.awb_number}. Ready for RFS pickup.`, shipment_awb: shipment.awb_number }]);
       setActionBy(''); await fetchData();
@@ -228,7 +251,7 @@ export default function ShipmentDetails() {
     if (!actionBy) return alert('Please enter your name.');
     setIsSubmitting(true);
     try {
-      await supabase.from('shipments_secure').update({ current_status: newStatus }).eq('id', shipment.id);
+      await supabase.from('shipments').update({ current_status: newStatus }).eq('id', shipment.id);
       await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: newStatus, status_notes: statusNotes, updated_by_role: userRole, action_by_name: actionBy }]);
       await supabase.from('notifications').insert([{ role_target: 'ALL', title: `Shipment Update: ${newStatus}`, message: `${userRole} (${actionBy}) updated AWB ${shipment.awb_number} to: ${newStatus}.`, shipment_awb: shipment.awb_number }]);
       setNewStatus(''); setStatusNotes(''); setActionBy(''); await fetchData();
@@ -256,7 +279,7 @@ export default function ShipmentDetails() {
   const handleDelete = async () => {
     if (!window.confirm(`Delete shipment ${awb}?`)) return;
     setIsSubmitting(true);
-    await supabase.from('shipments_secure').delete().eq('id', shipment.id);
+    await supabase.from('shipments').delete().eq('id', shipment.id);
     await supabase.from('notifications').delete().eq('shipment_awb', shipment.awb_number);
     router.push('/dashboard/shipments'); router.refresh(); 
   };
@@ -268,19 +291,8 @@ export default function ShipmentDetails() {
   const handleSaveEdit = async () => {
     setIsSubmitting(true);
     try {
-      await supabase.from('shipments_secure').update({ 
-        sender_details: editFormData.sender_details, 
-        receiver_details: editFormData.receiver_details, 
-        weight: parseFloat(editFormData.weight), 
-        dimensions: editFormData.dimensions, 
-        origin: editFormData.origin, 
-        destination: editFormData.destination, 
-        commodity_type: editFormData.commodity_type, 
-        shipment_type: editFormData.shipment_type,
-        service_type: editFormData.service_type,
-        agreed_amount: editFormData.agreed_amount ? parseFloat(editFormData.agreed_amount) : null,
-        rate: editFormData.rate ? parseFloat(editFormData.rate) : null,
-        currency: editFormData.currency
+      await supabase.from('shipments').update({ 
+        sender_details: editFormData.sender_details, receiver_details: editFormData.receiver_details, weight: parseFloat(editFormData.weight), dimensions: editFormData.dimensions, origin: editFormData.origin, destination: editFormData.destination, commodity_type: editFormData.commodity_type, shipment_type: editFormData.shipment_type, service_type: editFormData.service_type, agreed_amount: editFormData.agreed_amount ? parseFloat(editFormData.agreed_amount) : null, rate: editFormData.rate ? parseFloat(editFormData.rate) : null, currency: editFormData.currency
       }).eq('id', shipment.id);
       await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: 'Details Edited', status_notes: 'Shipment info corrected.', updated_by_role: userRole, action_by_name: actionBy || userRole }]);
       setIsEditing(false); await fetchData();
@@ -291,7 +303,7 @@ export default function ShipmentDetails() {
     if (!actionBy) return alert('Please enter your name.');
     setIsSubmitting(true);
     try {
-      await supabase.from('shipments_secure').update({ payment_status: 'Approved' }).eq('id', shipment.id).eq('payment_status', 'Pending'); 
+      await supabase.from('shipments').update({ payment_status: 'Approved' }).eq('id', shipment.id).eq('payment_status', 'Pending'); 
       await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: 'Finance Approved', status_notes: 'Payment confirmed.', updated_by_role: userRole, action_by_name: actionBy }]);
       await supabase.from('notifications').insert([{ role_target: 'Freight', title: 'Action Needed: Book Shipment', message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}. Please book space.`, shipment_awb: shipment.awb_number }]);
       await supabase.from('notifications').insert([{ role_target: 'Customer Service', title: 'Payment Approved', message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}. Awaiting Freight booking.`, shipment_awb: shipment.awb_number }]);
@@ -304,15 +316,19 @@ export default function ShipmentDetails() {
 
   const canEditOrDelete = userRole === 'Super Admin' || userRole === 'Customer Service';
   const canSeeFinancials = userRole === 'Super Admin' || userRole === 'Customer Service' || userRole === 'Finance' || userRole === 'Freight';
+  const canRecordPayment = userRole === 'Super Admin' || userRole === 'Finance';
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
+      <Toaster position="top-right" richColors />
+      
       {!isOnline && (
         <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-700 p-4 rounded-md flex items-center gap-3 shadow-sm">
           <WifiOff size={20} /> <p className="font-medium text-sm">You are offline. Changes will sync when connection returns.</p>
         </div>
       )}
 
+      {/* HEADER */}
       <div className="flex justify-between items-center mb-2">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/shipments" className="text-slate-400 hover:text-slate-800 transition-colors p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft size={20} /></Link>
@@ -405,6 +421,52 @@ export default function ShipmentDetails() {
             </div>
           </div>
 
+          {/* FINANCIAL LEDGER */}
+          {canSeeFinancials && !isEditing && (
+            <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
+              <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-4">
+                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2"><DollarSign size={20} className="text-emerald-500"/> Financial Ledger</h2>
+                {canRecordPayment && (
+                  <button onClick={() => setShowPaymentModal(true)} className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-md">
+                    <Plus size={16} /> Record Payment
+                  </button>
+                )}
+              </div>
+              
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  <p className="text-xs font-bold text-slate-500 uppercase mb-1">Agreed Amount</p>
+                  <p className="text-lg font-extrabold text-slate-900">{shipment.currency} {agreedAmount.toLocaleString()}</p>
+                </div>
+                <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200">
+                  <p className="text-xs font-bold text-emerald-700 uppercase mb-1">Total Paid</p>
+                  <p className="text-lg font-extrabold text-emerald-700">{shipment.currency} {totalPaid.toLocaleString()}</p>
+                </div>
+                <div className={`p-4 rounded-xl border ${balance > 0 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+                  <p className={`text-xs font-bold uppercase mb-1 ${balance > 0 ? 'text-amber-700' : 'text-slate-500'}`}>Outstanding</p>
+                  <p className={`text-lg font-extrabold ${balance > 0 ? 'text-amber-700' : 'text-slate-900'}`}>{shipment.currency} {balance.toLocaleString()}</p>
+                </div>
+              </div>
+
+              <h3 className="text-sm font-bold text-slate-800 mb-3">Payment History</h3>
+              <div className="space-y-2">
+                {payments.length === 0 && <p className="text-sm text-slate-500 italic">No payments recorded yet.</p>}
+                {payments.map(p => (
+                  <div key={p.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <div>
+                      <p className="text-sm font-bold text-slate-900">{p.currency} {parseFloat(p.amount).toLocaleString()}</p>
+                      <p className="text-xs text-slate-500">{p.payment_method} • Ref: {p.reference || 'N/A'}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-bold text-slate-600">{new Date(p.created_at).toLocaleDateString()}</p>
+                      <p className="text-xs text-slate-400">By: {p.recorded_by}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {!isEditing && (
             <>
               <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 shadow-inner">
@@ -471,35 +533,17 @@ export default function ShipmentDetails() {
 
                 <div className="space-y-3">
                   {documents.length === 0 && <p className="text-slate-500 text-sm italic">No documents uploaded yet.</p>}
-                  {documents.map((doc) => {
-                    const signedUrl = signedUrls[doc.id];
-                    return (
-                      <div
-                        key={doc.id}
-                        className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-200 transition-colors group"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><FileText size={20} /></div>
-                          <div>
-                            <p className="text-sm font-bold text-slate-800 group-hover:text-indigo-700">{doc.file_name}</p>
-                            <p className="text-xs text-slate-500">Uploaded by {doc.uploaded_by} on {new Date(doc.created_at).toLocaleDateString()}</p>
-                          </div>
+                  {documents.map((doc) => (
+                    <a key={doc.id} href={doc.file_url || '#'} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-200 transition-colors group">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><FileText size={20} /></div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800 group-hover:text-indigo-700">{doc.file_name}</p>
+                          <p className="text-xs text-slate-500">Uploaded by {doc.uploaded_by} on {new Date(doc.created_at).toLocaleDateString()}</p>
                         </div>
-                        {signedUrl ? (
-                          <a
-                            href={signedUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
-                          >
-                            <Download size={14} /> View
-                          </a>
-                        ) : (
-                          <span className="text-xs font-medium text-slate-400">Generating link…</span>
-                        )}
                       </div>
-                    );
-                  })}
+                    </a>
+                  ))}
                 </div>
               </div>
             </>
@@ -543,6 +587,44 @@ export default function ShipmentDetails() {
           </div>
         </div>
       </div>
+
+      {/* RECORD PAYMENT MODAL */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h3 className="font-bold text-slate-800">Record Payment</h3>
+              <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+            </div>
+            <form onSubmit={handleRecordPayment} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Amount Paid ({shipment.currency})</label>
+                <input type="number" step="0.01" required value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 font-bold" placeholder={`Max: ${balance}`} />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Payment Method</label>
+                <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 bg-white">
+                  <option value="Bank Transfer">Bank Transfer</option>
+                  <option value="Cash">Cash</option>
+                  <option value="Cheque">Cheque</option>
+                  <option value="POS">POS</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Transaction Reference</label>
+                <input type="text" value={paymentRef} onChange={e => setPaymentRef(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="Optional e.g. GTB-12345" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Recorded By (Your Name)</label>
+                <input type="text" required value={actionBy} onChange={e => setActionBy(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="e.g. Jane Doe" />
+              </div>
+              <button type="submit" disabled={isSubmitting} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition-all flex justify-center items-center gap-2 mt-2">
+                {isSubmitting ? 'Processing...' : 'Record Payment'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
