@@ -73,6 +73,37 @@ export async function POST(req: Request) {
       );
     }
 
+    // Never delete tenant accounts while business records still reference the company.
+    const companyScopedTables = [
+      'audit_logs',
+      'clients',
+      'notifications',
+      'payments',
+      'shipment_comments',
+      'shipment_documents',
+      'shipment_timeline',
+      'shipments',
+    ] as const;
+
+    const recordChecks = await Promise.all(
+      companyScopedTables.map(table =>
+        supabaseAdmin.from(table).select('*', { count: 'exact', head: true }).eq('company_id', companyId),
+      ),
+    );
+
+    if (recordChecks.some(check => check.error)) {
+      console.error('Company deletion preflight failed:', recordChecks.filter(check => check.error));
+      return NextResponse.json({ error: 'Unable to verify company records. No users were deleted.' }, { status: 500 });
+    }
+
+    const hasBusinessRecords = recordChecks.some(check => (check.count ?? 0) > 0);
+    if (hasBusinessRecords) {
+      return NextResponse.json(
+        { error: 'This company has business or audit records. Suspend it instead; permanent deletion is blocked to preserve records.' },
+        { status: 409 },
+      );
+    }
+
     for (const profile of profiles ?? []) {
       const { error: deleteUserError } = await supabaseAdmin.auth.admin.deleteUser(profile.id);
       if (deleteUserError) {
