@@ -1,3 +1,27 @@
+-- Platform owner accounts are global and are not assigned to a tenant.
+-- Existing tenant users remain company-bound; only a Platform Admin may be global.
+ALTER TABLE public.profiles
+  ALTER COLUMN company_id DROP NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'profiles_tenant_assignment_check'
+      AND conrelid = 'public.profiles'::regclass
+  ) THEN
+    ALTER TABLE public.profiles
+      ADD CONSTRAINT profiles_tenant_assignment_check
+      CHECK (
+        (is_platform_admin IS TRUE AND company_id IS NULL)
+        OR
+        (is_platform_admin IS DISTINCT FROM TRUE AND company_id IS NOT NULL)
+      );
+  END IF;
+END;
+$$;
+
 -- Prevent tenant administrators from escalating account or subscription privileges.
 -- This migration is intentionally additive and does not rewrite existing company/user data.
 
