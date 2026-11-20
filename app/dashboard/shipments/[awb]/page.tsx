@@ -788,7 +788,7 @@ export default function ShipmentDetails() {
                       <input type="text" placeholder="Optional details..." value={statusNotes} onChange={e => setStatusNotes(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm" />
                     </div>
                     <div className="md:col-span-2">
-                      <button onClick={handleUpdateStatus} disabled={isSubmitting} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md">
+                      <button onClick={() => handleUpdateStatus()} disabled={isSubmitting} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md">
                         {isSubmitting ? 'Updating...' : 'Force Update Status'}
                       </button>
                     </div>
