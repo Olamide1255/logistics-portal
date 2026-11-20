@@ -9,6 +9,8 @@ import { toast, Toaster } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+const MAX_SHIPMENT_DOCUMENT_SIZE = 10 * 1024 * 1024;
+
 export default function ShipmentDetails() {
   const params = useParams();
   const router = useRouter();
@@ -101,7 +103,7 @@ export default function ShipmentDetails() {
         setTimeline((prev) => prev.some(t => t.id === payload.new.id) ? prev : [payload.new, ...prev.filter(t => !t.isOptimistic)]);
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shipment_documents', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
-        setDocuments((prev) => [payload.new, ...prev]);
+        setDocuments((prev) => prev.some((doc) => doc.id === payload.new.id) ? prev : [payload.new, ...prev]);
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'payments', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
         setPayments((prev) => [payload.new, ...prev]);
@@ -161,34 +163,132 @@ export default function ShipmentDetails() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!actionBy) return alert('Please enter your name in the "Action By" field before uploading.');
+
+    const allowedFileTypes: Record<string, { mimeType: string; extensions: string[] }> = {
+      'application/pdf': { mimeType: 'application/pdf', extensions: ['pdf'] },
+      'image/jpeg': { mimeType: 'image/jpeg', extensions: ['jpg', 'jpeg'] },
+      'image/png': { mimeType: 'image/png', extensions: ['png'] }
+    };
+    const fileExtension = file.name.split('.').pop()?.toLowerCase() || '';
+    const matchingType = allowedFileTypes[file.type];
+
+    if (!actionBy.trim()) {
+      toast.error('Enter your name in the "Action By" field before uploading.');
+      e.target.value = '';
+      return;
+    }
+    if (!matchingType || !matchingType.extensions.includes(fileExtension)) {
+      toast.error('Unsupported file type. Upload a PDF, JPG, JPEG, or PNG file.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size === 0) {
+      toast.error('The selected file is empty.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > MAX_SHIPMENT_DOCUMENT_SIZE) {
+      toast.error('File is too large. The maximum document size is 10 MB.');
+      e.target.value = '';
+      return;
+    }
 
     setUploading(true);
+    let uploadedFilePath: string | null = null;
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user!.id).single();
-      
-      const fileExt = file.name.split('.').pop();
-      const filePath = `${profile!.company_id}/${shipment.id}/${Date.now()}.${fileExt}`;
-      
-      const { error: uploadError } = await supabase.storage.from('shipment-documents').upload(filePath, file);
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) throw new Error('Your session could not be verified. Please sign in again.');
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', user.id)
+        .single();
+      if (profileError || !profile?.company_id) throw new Error('Your company profile could not be verified.');
+
+      if (!shipment?.id || !shipment?.company_id || shipment.company_id !== profile.company_id) {
+        throw new Error('You do not have permission to upload documents for this shipment.');
+      }
+
+      const filePath = `${profile.company_id}/${shipment.id}/${crypto.randomUUID()}.${fileExtension}`;
+      const { error: uploadError } = await supabase.storage
+        .from('shipment-documents')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          contentType: matchingType.mimeType,
+          upsert: false
+        });
       if (uploadError) throw uploadError;
+      uploadedFilePath = filePath;
 
-      const { error: dbError } = await supabase.from('shipment_documents').insert([{
-        shipment_id: shipment.id,
-        company_id: profile!.company_id,
-        file_name: file.name,
-        file_path: filePath,
-        uploaded_by: actionBy
-      }]);
-      if (dbError) throw dbError;
+      // file_url is retained for compatibility with the existing NOT NULL schema.
+      // It stores the private object path, never a permanent or public URL.
+      const { data: savedDocument, error: dbError } = await supabase
+        .from('shipment_documents')
+        .insert([{
+          shipment_id: shipment.id,
+          company_id: profile.company_id,
+          file_name: file.name,
+          file_path: filePath,
+          file_url: filePath,
+          uploaded_by: actionBy.trim()
+        }])
+        .select('*')
+        .single();
 
-      toast.success("Document uploaded securely!");
+      if (dbError) {
+        const { error: cleanupError } = await supabase.storage.from('shipment-documents').remove([filePath]);
+        if (cleanupError) console.error('Failed to clean up orphaned shipment document:', cleanupError);
+        uploadedFilePath = null;
+        throw dbError;
+      }
+
+      setDocuments((previous) => previous.some((doc) => doc.id === savedDocument.id)
+        ? previous
+        : [savedDocument, ...previous]);
+      toast.success('Document uploaded securely.');
     } catch (error: any) {
-      alert("Error uploading file: " + error.message);
+      if (uploadedFilePath) {
+        const { error: cleanupError } = await supabase.storage.from('shipment-documents').remove([uploadedFilePath]);
+        if (cleanupError) console.error('Failed to clean up uploaded shipment document:', cleanupError);
+      }
+      toast.error(`Document upload failed: ${error?.message || 'Unexpected error'}`);
     } finally {
       setUploading(false);
-      e.target.value = ''; 
+      e.target.value = '';
+    }
+  };
+
+  const handleOpenDocument = async (document: any) => {
+    // Open a blank tab synchronously so browser popup blockers do not discard the user action.
+    const newWindow = window.open('about:blank', '_blank');
+    try {
+      let storagePath = document.file_path || document.file_url;
+      if (!storagePath) throw new Error('This document has no stored file path.');
+
+      // Older records may contain a Supabase object URL instead of a storage path.
+      if (/^https?:\/\//i.test(storagePath)) {
+        const bucketMarker = '/shipment-documents/';
+        const bucketIndex = storagePath.indexOf(bucketMarker);
+        if (bucketIndex >= 0) {
+          storagePath = decodeURIComponent(storagePath.slice(bucketIndex + bucketMarker.length).split('?')[0]);
+        } else {
+          if (newWindow) newWindow.location.href = storagePath;
+          else window.location.assign(storagePath);
+          return;
+        }
+      }
+
+      const { data, error } = await supabase.storage
+        .from('shipment-documents')
+        .createSignedUrl(storagePath, 300);
+      if (error || !data?.signedUrl) throw error || new Error('Could not create a secure document link.');
+
+      if (newWindow) newWindow.location.href = data.signedUrl;
+      else window.location.assign(data.signedUrl);
+    } catch (error: any) {
+      newWindow?.close();
+      toast.error(`Could not open document: ${error?.message || 'Unexpected error'}`);
     }
   };
 
@@ -702,7 +802,7 @@ export default function ShipmentDetails() {
                 <div className="mb-6 p-4 bg-slate-50 border border-slate-200 rounded-xl border-dashed flex flex-col items-center justify-center text-center">
                   <Upload className="text-slate-400 mb-2" size={32} />
                   <p className="text-sm text-slate-600 font-medium mb-2">Upload proof of pickup, customs forms, or invoices.</p>
-                  <input type="file" id="file-upload" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+                  <input type="file" id="file-upload" className="hidden" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={handleFileUpload} disabled={uploading} />
                   <label htmlFor="file-upload" className={`cursor-pointer bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-semibold shadow-sm hover:bg-slate-50 transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
                     {uploading ? 'Uploading...' : 'Select File to Upload'}
                   </label>
@@ -711,7 +811,7 @@ export default function ShipmentDetails() {
                 <div className="space-y-3">
                   {documents.length === 0 && <p className="text-slate-500 text-sm italic">No documents uploaded yet.</p>}
                   {documents.map((doc) => (
-                    <a key={doc.id} href={doc.file_url || '#'} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-200 transition-colors group">
+                    <button key={doc.id} type="button" onClick={() => handleOpenDocument(doc)} className="w-full flex items-center justify-between p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-200 transition-colors group text-left">
                       <div className="flex items-center gap-3">
                         <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><FileText size={20} /></div>
                         <div>
@@ -719,7 +819,8 @@ export default function ShipmentDetails() {
                           <p className="text-xs text-slate-500">Uploaded by {doc.uploaded_by} on {new Date(doc.created_at).toLocaleDateString()}</p>
                         </div>
                       </div>
-                    </a>
+                      <span className="text-xs font-semibold text-indigo-600">Open</span>
+                    </button>
                   ))}
                 </div>
               </div>
