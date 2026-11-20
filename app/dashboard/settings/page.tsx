@@ -156,7 +156,7 @@ export default function CompanySettings() {
               <Upload className="text-slate-400" size={32} />
             )}
           </div>
-          <input type="file" id="logo-upload" className="hidden" accept="image/*" onChange={handleLogoUpload} disabled={uploading} />
+          <input type="file" id="logo-upload" className="hidden" accept="image/png,image/jpeg" onChange={handleLogoUpload} disabled={uploading} />
           <label htmlFor="logo-upload" className={`cursor-pointer bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg font-semibold shadow-sm hover:bg-indigo-100 transition-colors ${uploading ? 'opacity-50' : ''}`}>
             {uploading ? 'Uploading...' : 'Upload Logo'}
           </label>
