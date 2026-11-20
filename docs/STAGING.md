@@ -12,7 +12,7 @@ This project is isolated from production. It contains no production tenant data,
 
 ## Schema and fixtures
 
-The reproducible baseline is in `supabase/migrations/20261120135146_staging_schema_baseline.sql`. The prior incremental production migrations are retained under `supabase/migrations/archive/` for history and are not applied as new migrations.
+The reproducible baseline is in `supabase/migrations/20261120135146_staging_schema_baseline.sql`. The follow-up `20261120135246_optimize_profile_rls_initplan.sql` avoids per-row auth UID evaluation in the profile policy. The prior incremental production migrations are retained under `supabase/migrations/archive/` for history and are not applied as new migrations.
 
 Synthetic fixtures are in `supabase/seed.sql` and can be reloaded with the Supabase CLI seed workflow. Two tenants are created:
 
