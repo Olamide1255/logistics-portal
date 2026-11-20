@@ -142,17 +142,42 @@ CREATE OR REPLACE FUNCTION public.enforce_shipment_workflow()
 RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = pg_catalog, public
-AS $
+AS $$
 DECLARE
   actor_role text := public.get_my_role();
+  details_changed boolean;
 BEGIN
-  IF OLD.current_status IS NOT DISTINCT FROM NEW.current_status THEN
-    RETURN NEW;
-  END IF;
-
   IF current_setting('request.jwt.claim.role', true) = 'service_role'
      OR actor_role = 'Super Admin'
      OR public.is_platform_admin() THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.id IS DISTINCT FROM OLD.id
+     OR NEW.company_id IS DISTINCT FROM OLD.company_id
+     OR NEW.awb_number IS DISTINCT FROM OLD.awb_number
+     OR NEW.client_id IS DISTINCT FROM OLD.client_id
+     OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+    RAISE EXCEPTION 'Shipment identity and tenant ownership cannot be changed'
+      USING ERRCODE = '42501';
+  END IF;
+
+  details_changed :=
+    (to_jsonb(NEW) - ARRAY['current_status', 'payment_status', 'updated_at'])
+    IS DISTINCT FROM
+    (to_jsonb(OLD) - ARRAY['current_status', 'payment_status', 'updated_at']);
+
+  IF details_changed AND actor_role <> 'Customer Service' THEN
+    RAISE EXCEPTION 'Only Customer Service or an administrator can edit shipment details'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF NEW.payment_status IS DISTINCT FROM OLD.payment_status AND actor_role <> 'Finance' THEN
+    RAISE EXCEPTION 'Only Finance or an administrator can change payment status'
+      USING ERRCODE = '42501';
+  END IF;
+
+  IF OLD.current_status IS NOT DISTINCT FROM NEW.current_status THEN
     RETURN NEW;
   END IF;
 
@@ -176,7 +201,7 @@ BEGIN
     COALESCE(actor_role, 'Unknown'), OLD.current_status, NEW.current_status
     USING ERRCODE = '42501';
 END;
-$;
+$$;
 
 -- Shipment registration is limited to the roles shown in the registration UI.
 DROP POLICY IF EXISTS shipments_insert ON public.shipments;
