@@ -19,21 +19,22 @@ export default function EmployeeManagement() {
 
   const fetchEmployees = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
-    console.log('DEBUG: Logged in user ID:', user.id);
-    console.log('DEBUG: Logged in user email:', user.email);
-
-    // Fetch profile with more detailed logging
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
       .single();
-    
-    console.log('DEBUG: Profile data:', profile);
-    console.log('DEBUG: Profile error:', profileError);
-    console.log('DEBUG: Profile company_id:', profile?.company_id);
+
+    if (profileError || !profile) {
+      setIsAuthorized(false);
+      setLoading(false);
+      return;
+    }
 
     if (profile?.role !== 'Super Admin' && !profile?.is_platform_admin) {
       setIsAuthorized(false);
@@ -44,18 +45,13 @@ export default function EmployeeManagement() {
     setIsAuthorized(true);
     setCompanyId(profile.company_id);
 
-    // Fetch employees with explicit logging
+    // Load employees for the authenticated company.
     const { data: emps, error: empsError, count } = await supabase
       .from('profiles')
       .select('*', { count: 'exact' })
       .eq('company_id', profile.company_id)
       .order('email', { ascending: true });
     
-    console.log('DEBUG: Employees fetched:', emps?.length);
-    console.log('DEBUG: Employees list:', emps);
-    console.log('DEBUG: Employees error:', empsError);
-    console.log('DEBUG: Total count:', count);
-
     if (emps) setEmployees(emps);
     setLoading(false);
   };

@@ -107,9 +107,20 @@ export default function CompanySettings() {
     const file = e.target.files?.[0];
     if (!file || !company) return;
 
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      toast.error('Logo must be a PNG or JPEG image.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Logo must be 10 MB or smaller.');
+      e.target.value = '';
+      return;
+    }
+
     setUploading(true);
     try {
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.type === 'image/png' ? 'png' : 'jpg';
       const filePath = `${company.id}/logo-${Date.now()}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage.from('shipment-documents').upload(filePath, file);
@@ -156,7 +167,7 @@ export default function CompanySettings() {
               <Upload className="text-slate-400" size={32} />
             )}
           </div>
-          <input type="file" id="logo-upload" className="hidden" accept="image/*" onChange={handleLogoUpload} disabled={uploading} />
+          <input type="file" id="logo-upload" className="hidden" accept="image/png,image/jpeg" onChange={handleLogoUpload} disabled={uploading} />
           <label htmlFor="logo-upload" className={`cursor-pointer bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg font-semibold shadow-sm hover:bg-indigo-100 transition-colors ${uploading ? 'opacity-50' : ''}`}>
             {uploading ? 'Uploading...' : 'Upload Logo'}
           </label>
