@@ -224,11 +224,23 @@ ON public.payments
 FOR SELECT
 TO authenticated
 USING (
-  company_id = (SELECT public.get_my_company_id())
-  AND (
-    (SELECT public.get_my_role()) IN ('Super Admin', 'Customer Service', 'Finance', 'Freight', 'Platform Admin')
-    OR (SELECT public.is_platform_admin())
+  (SELECT public.is_platform_admin())
+  OR (
+    company_id = (SELECT public.get_my_company_id())
+    AND (SELECT public.get_my_role()) IN ('Super Admin', 'Customer Service', 'Finance', 'Freight', 'Platform Admin')
   )
+);
+
+-- Platform Admins can view cross-tenant shipment rows for platform-wide usage
+-- reporting; ordinary tenant users remain restricted to their own company.
+DROP POLICY IF EXISTS shipments_select ON public.shipments;
+CREATE POLICY shipments_select
+ON public.shipments
+FOR SELECT
+TO authenticated
+USING (
+  (SELECT public.is_platform_admin())
+  OR company_id = (SELECT public.get_my_company_id())
 );
 
 
