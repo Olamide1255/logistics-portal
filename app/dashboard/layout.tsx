@@ -162,8 +162,15 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (userRole === 'Loading...') return;
-    const interval = setInterval(() => { if (navigator.onLine) fetchNotifications(userRole); }, 30 * 1000);
-    return () => clearInterval(interval);
+    const pollNotifications = () => {
+      if (navigator.onLine && document.visibilityState === 'visible') void fetchNotifications(userRole);
+    };
+    const interval = setInterval(pollNotifications, 2 * 60 * 1000);
+    document.addEventListener('visibilitychange', pollNotifications);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', pollNotifications);
+    };
   }, [userRole]);
 
   useEffect(() => {
@@ -179,8 +186,15 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       } catch (e) {}
     };
     checkVersion();
-    const interval = setInterval(checkVersion, 15 * 1000);
-    return () => clearInterval(interval);
+    const pollVersion = () => {
+      if (document.visibilityState === 'visible') void checkVersion();
+    };
+    const interval = setInterval(pollVersion, 5 * 60 * 1000);
+    document.addEventListener('visibilitychange', pollVersion);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', pollVersion);
+    };
   }, []);
 
   useEffect(() => {

@@ -1,0 +1,46 @@
+name: Quality and browser tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+      STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
+      E2E_PLATFORM_ADMIN_EMAIL: ${{ secrets.E2E_PLATFORM_ADMIN_EMAIL }}
+      E2E_PLATFORM_ADMIN_PASSWORD: ${{ secrets.E2E_PLATFORM_ADMIN_PASSWORD }}
+      E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+      E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Build production application
+        run: npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run local browser smoke tests
+        run: npm run test:e2e -- e2e/smoke.spec.ts
+      - name: Run authenticated staging journeys
+        if: ${{ env.STAGING_BASE_URL != '' && env.E2E_PLATFORM_ADMIN_EMAIL != '' && env.E2E_PLATFORM_ADMIN_PASSWORD != '' && env.E2E_TENANT_EMAIL != '' && env.E2E_TENANT_PASSWORD != '' }}
+        env:
+          E2E_BASE_URL: ${{ env.STAGING_BASE_URL }}
+        run: npm run test:e2e -- e2e/authenticated.spec.ts
