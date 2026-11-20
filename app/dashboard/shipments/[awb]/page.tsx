@@ -239,25 +239,81 @@ export default function ShipmentDetails() {
     if (!actionBy) return alert('Please enter your name in the "Action By" field.');
     setIsSubmitting(true);
     try {
-      await supabase.from('shipments').update({ current_status: 'Booked' }).eq('id', shipment.id);
-      await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: 'Booked', status_notes: 'Freight space secured.', updated_by_role: userRole, action_by_name: actionBy }]);
-      await supabase.from('notifications').insert([{ role_target: 'ALL', title: 'Shipment Booked', message: `Freight (${actionBy}) booked space for AWB ${shipment.awb_number}. Ready for RFS pickup.`, shipment_awb: shipment.awb_number }]);
-      setActionBy(''); await fetchData();
-    } catch (error) { alert("Error booking shipment."); } finally { setIsSubmitting(false); }
+      const { error: statusError } = await supabase
+        .from('shipments')
+        .update({ current_status: 'Booked' })
+        .eq('id', shipment.id);
+      if (statusError) throw statusError;
+
+      const { error: timelineError } = await supabase.from('shipment_timeline').insert([{
+        shipment_id: shipment.id,
+        status_dropdown: 'Booked',
+        status_notes: 'Freight space secured.',
+        updated_by_role: userRole,
+        action_by_name: actionBy,
+      }]);
+      if (timelineError) throw timelineError;
+
+      const { error: notificationError } = await supabase.from('notifications').insert([{
+        role_target: 'ALL',
+        title: 'Shipment Booked',
+        message: `Freight (${actionBy}) booked space for AWB ${shipment.awb_number}. Ready for RFS pickup.`,
+        shipment_awb: shipment.awb_number,
+      }]);
+      if (notificationError) toast.warning('Shipment booked, but the team notification could not be created.');
+
+      setActionBy('');
+      await fetchData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to book this shipment.');
+      await fetchData();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleUpdateStatus = async () => {
-    if (!newStatus) return alert('Please select a status.');
+  const handleUpdateStatus = async (statusToApply = newStatus, notesToApply = statusNotes) => {
+    if (!statusToApply) return alert('Please select a status.');
     if (!actionBy) return alert('Please enter your name.');
     setIsSubmitting(true);
     try {
-      await supabase.from('shipments').update({ current_status: newStatus }).eq('id', shipment.id);
-      await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: newStatus, status_notes: statusNotes, updated_by_role: userRole, action_by_name: actionBy }]);
-      await supabase.from('notifications').insert([{ role_target: 'ALL', title: `Shipment Update: ${newStatus}`, message: `${userRole} (${actionBy}) updated AWB ${shipment.awb_number} to: ${newStatus}.`, shipment_awb: shipment.awb_number }]);
-      setNewStatus(''); setStatusNotes(''); setActionBy(''); await fetchData();
-    } catch (error) { 
-      toast.error(error instanceof Error ? error.message : "Error updating status."); 
-    } finally { setIsSubmitting(false); }
+      const { error: statusError } = await supabase
+        .from('shipments')
+        .update({ current_status: statusToApply })
+        .eq('id', shipment.id);
+      if (statusError) throw statusError;
+
+      const { error: timelineError } = await supabase.from('shipment_timeline').insert([{
+        shipment_id: shipment.id,
+        status_dropdown: statusToApply,
+        status_notes: notesToApply,
+        updated_by_role: userRole,
+        action_by_name: actionBy,
+      }]);
+      if (timelineError) {
+        toast.error('Shipment status changed, but its timeline entry could not be saved. Contact an administrator.');
+        await fetchData();
+        return;
+      }
+
+      const { error: notificationError } = await supabase.from('notifications').insert([{
+        role_target: 'ALL',
+        title: `Shipment Update: ${statusToApply}`,
+        message: `${userRole} (${actionBy}) updated AWB ${shipment.awb_number} to: ${statusToApply}.`,
+        shipment_awb: shipment.awb_number,
+      }]);
+      if (notificationError) toast.warning('Status and timeline saved, but the team notification could not be created.');
+
+      setNewStatus('');
+      setStatusNotes('');
+      setActionBy('');
+      await fetchData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to update shipment status.');
+      await fetchData();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleAddComment = async (e: React.FormEvent) => {
@@ -281,9 +337,14 @@ export default function ShipmentDetails() {
   const handleDelete = async () => {
     if (!window.confirm(`Delete shipment ${awb}?`)) return;
     setIsSubmitting(true);
-    await supabase.from('shipments').delete().eq('id', shipment.id);
-    await supabase.from('notifications').delete().eq('shipment_awb', shipment.awb_number);
-    router.push('/dashboard/shipments'); router.refresh(); 
+    const { error } = await supabase.from('shipments').delete().eq('id', shipment.id);
+    if (error) {
+      toast.error(error.message);
+      setIsSubmitting(false);
+      return;
+    }
+    router.push('/dashboard/shipments');
+    router.refresh(); 
   };
 
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -293,12 +354,38 @@ export default function ShipmentDetails() {
   const handleSaveEdit = async () => {
     setIsSubmitting(true);
     try {
-      await supabase.from('shipments').update({ 
-        sender_details: editFormData.sender_details, receiver_details: editFormData.receiver_details, weight: parseFloat(editFormData.weight), dimensions: editFormData.dimensions, origin: editFormData.origin, destination: editFormData.destination, commodity_type: editFormData.commodity_type, shipment_type: editFormData.shipment_type, service_type: editFormData.service_type, agreed_amount: editFormData.agreed_amount ? parseFloat(editFormData.agreed_amount) : null, rate: editFormData.rate ? parseFloat(editFormData.rate) : null, currency: editFormData.currency
+      const { error: updateError } = await supabase.from('shipments').update({
+        sender_details: editFormData.sender_details,
+        receiver_details: editFormData.receiver_details,
+        weight: parseFloat(editFormData.weight),
+        dimensions: editFormData.dimensions,
+        origin: editFormData.origin,
+        destination: editFormData.destination,
+        commodity_type: editFormData.commodity_type,
+        shipment_type: editFormData.shipment_type,
+        service_type: editFormData.service_type,
+        agreed_amount: editFormData.agreed_amount ? parseFloat(editFormData.agreed_amount) : null,
+        rate: editFormData.rate ? parseFloat(editFormData.rate) : null,
+        currency: editFormData.currency,
       }).eq('id', shipment.id);
-      await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: 'Details Edited', status_notes: 'Shipment info corrected.', updated_by_role: userRole, action_by_name: actionBy || userRole }]);
-      setIsEditing(false); await fetchData();
-    } catch (error) { alert("Error saving changes."); } finally { setIsSubmitting(false); }
+      if (updateError) throw updateError;
+
+      const { error: timelineError } = await supabase.from('shipment_timeline').insert([{
+        shipment_id: shipment.id,
+        status_dropdown: 'Details Edited',
+        status_notes: 'Shipment info corrected.',
+        updated_by_role: userRole,
+        action_by_name: actionBy || userRole,
+      }]);
+      if (timelineError) toast.warning('Shipment details saved, but the timeline entry could not be created.');
+
+      setIsEditing(false);
+      await fetchData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to save shipment changes.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleApprovePayment = async () => {
@@ -502,7 +589,7 @@ export default function ShipmentDetails() {
                   <div className="mb-6 p-4 bg-white border border-blue-200 rounded-xl shadow-sm">
                     <p className="text-blue-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Shipment Ready for Pickup</p>
                     <div className="flex flex-col gap-2">
-                       <button onClick={() => { setNewStatus('Picked Up'); setStatusNotes('Picked up by RFS'); handleUpdateStatus(); }} disabled={isSubmitting} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700 w-full">Confirm Pickup</button>
+                       <button onClick={() => handleUpdateStatus('Picked Up', 'Picked up by RFS')} disabled={isSubmitting} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700 w-full">Confirm Pickup</button>
                     </div>
                   </div>
                 )}
@@ -512,8 +599,8 @@ export default function ShipmentDetails() {
                     <p className="text-purple-700 font-bold mb-3 flex items-center gap-2"><Anchor size={18}/> Routing Decision</p>
                     <p className="text-xs text-slate-500 mb-3">Did you deliver this locally or are you handing it to Operations for export?</p>
                     <div className="flex gap-2">
-                      <button onClick={() => { setNewStatus('Delivered'); setStatusNotes('Delivered locally by RFS'); handleUpdateStatus(); }} disabled={isSubmitting} className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-700 w-1/2">Delivered (Local)</button>
-                      <button onClick={() => { setNewStatus('Handed to Ops'); setStatusNotes('Handed to Ops for export'); handleUpdateStatus(); }} disabled={isSubmitting} className="bg-purple-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-purple-700 w-1/2">Handover to Ops</button>
+                      <button onClick={() => handleUpdateStatus('Delivered', 'Delivered locally by RFS')} disabled={isSubmitting} className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-700 w-1/2">Delivered (Local)</button>
+                      <button onClick={() => handleUpdateStatus('Handed to Ops', 'Handed to Ops for export')} disabled={isSubmitting} className="bg-purple-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-purple-700 w-1/2">Handover to Ops</button>
                     </div>
                   </div>
                 )}
@@ -524,9 +611,9 @@ export default function ShipmentDetails() {
                     <p className="text-amber-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Operations Processing</p>
                     <div className="flex flex-col gap-2">
                       {shipment.current_status === 'Handed to Ops' && (
-                        <button onClick={() => { setNewStatus('Export Cleared'); setStatusNotes('Customs/Export formalities cleared'); handleUpdateStatus(); }} disabled={isSubmitting} className="bg-amber-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-amber-700 w-full">Mark Export Cleared</button>
+                        <button onClick={() => handleUpdateStatus('Export Cleared', 'Customs/Export formalities cleared')} disabled={isSubmitting} className="bg-amber-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-amber-700 w-full">Mark Export Cleared</button>
                       )}
-                      <button onClick={() => { setNewStatus('Handed to Airline'); setStatusNotes('Handed over to Airline'); handleUpdateStatus(); }} disabled={isSubmitting} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-indigo-700 w-full">Handover to Airline</button>
+                      <button onClick={() => handleUpdateStatus('Handed to Airline', 'Handed over to Airline')} disabled={isSubmitting} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-indigo-700 w-full">Handover to Airline</button>
                     </div>
                   </div>
                 )}
