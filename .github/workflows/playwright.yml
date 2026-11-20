@@ -38,6 +38,9 @@ jobs:
       - name: Build Next.js application
         run: npm run build
 
+      - name: Run API authorization smoke tests
+        run: npx playwright test e2e/security-api.api.spec.ts --project=chromium
+
       - name: Install Playwright browsers (staging only)
         if: env.E2E_TESTS_ENABLED == 'true'
         run: npx playwright install --with-deps
