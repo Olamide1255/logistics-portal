@@ -20,6 +20,11 @@ BEGIN
 
   -- Only an existing Platform Admin may change tenant assignment or platform-admin status.
   IF NOT public.is_platform_admin() THEN
+    IF OLD.is_platform_admin IS TRUE THEN
+      RAISE EXCEPTION 'Tenant administrators cannot modify a Platform Admin profile'
+        USING ERRCODE = '42501';
+    END IF;
+
     IF NEW.email IS DISTINCT FROM OLD.email THEN
       RAISE EXCEPTION 'Only a Platform Admin or trusted backend can change a profile email'
         USING ERRCODE = '42501';
