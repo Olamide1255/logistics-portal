@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
+import { findAuthUserByEmail } from '@/lib/findAuthUserByEmail';
 
 export async function POST(req: Request) {
   try {
@@ -62,13 +63,14 @@ export async function POST(req: Request) {
     );
 
     // CHECK IF EMAIL ALREADY EXISTS.
-    const { data: existingUsers, error: listUsersError } = await supabaseAdmin.auth.admin.listUsers();
-    if (listUsersError) {
-      console.error('Unable to check existing signup identity:', listUsersError);
+    let existingUser;
+    try {
+      existingUser = await findAuthUserByEmail(supabaseAdmin, email);
+    } catch (lookupError) {
+      console.error('Unable to check existing signup identity:', lookupError);
       return NextResponse.json({ error: 'Unable to verify this email address. Please try again.' }, { status: 503 });
     }
-    const emailExists = existingUsers.users.some(user => user.email?.toLowerCase() === email);
-    if (emailExists) {
+    if (existingUser) {
       return NextResponse.json({ error: 'An account with this email already exists.' }, { status: 409 });
     }
 
