@@ -40,6 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Supabase CLI local state (project links, generated metadata)
+supabase/.temp/
+
 # Playwright
 node_modules/
 /test-results/
