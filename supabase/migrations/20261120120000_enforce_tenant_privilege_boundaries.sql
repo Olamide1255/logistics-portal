@@ -13,8 +13,17 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  IF NEW.id IS DISTINCT FROM OLD.id THEN
+    RAISE EXCEPTION 'A profile identity cannot be changed'
+      USING ERRCODE = '42501';
+  END IF;
+
   -- Only an existing Platform Admin may change tenant assignment or platform-admin status.
   IF NOT public.is_platform_admin() THEN
+    IF NEW.email IS DISTINCT FROM OLD.email THEN
+      RAISE EXCEPTION 'Only a Platform Admin or trusted backend can change a profile email'
+        USING ERRCODE = '42501';
+    END IF;
     IF NEW.company_id IS DISTINCT FROM OLD.company_id THEN
       RAISE EXCEPTION 'Only a Platform Admin can change a user's company assignment'
         USING ERRCODE = '42501';
@@ -98,3 +107,57 @@ IS 'Prevents tenant-level users from changing company assignment or platform-adm
 
 COMMENT ON FUNCTION public.enforce_company_billing_boundaries()
 IS 'Prevents tenant-level users from changing company status or subscription tier.';
+
+
+-- Enforce that linked records always belong to the same tenant as their parent.
+-- Existing cross-company mismatch checks returned no rows before this migration was prepared.
+ALTER TABLE public.shipments
+  ADD CONSTRAINT shipments_client_company_fkey
+  FOREIGN KEY (client_id, company_id)
+  REFERENCES public.clients (id, company_id)
+  NOT VALID;
+
+ALTER TABLE public.payments
+  ADD CONSTRAINT payments_shipment_company_fkey
+  FOREIGN KEY (shipment_id, company_id)
+  REFERENCES public.shipments (id, company_id)
+  NOT VALID;
+
+ALTER TABLE public.shipment_comments
+  ADD CONSTRAINT shipment_comments_shipment_company_fkey
+  FOREIGN KEY (shipment_id, company_id)
+  REFERENCES public.shipments (id, company_id)
+  NOT VALID;
+
+ALTER TABLE public.shipment_documents
+  ADD CONSTRAINT shipment_documents_shipment_company_fkey
+  FOREIGN KEY (shipment_id, company_id)
+  REFERENCES public.shipments (id, company_id)
+  NOT VALID;
+
+ALTER TABLE public.shipment_timeline
+  ADD CONSTRAINT shipment_timeline_shipment_company_fkey
+  FOREIGN KEY (shipment_id, company_id)
+  REFERENCES public.shipments (id, company_id)
+  NOT VALID;
+
+ALTER TABLE public.clients
+  ADD CONSTRAINT clients_id_company_id_unique UNIQUE (id, company_id);
+
+ALTER TABLE public.shipments
+  ADD CONSTRAINT shipments_id_company_id_unique UNIQUE (id, company_id);
+
+ALTER TABLE public.shipments
+  VALIDATE CONSTRAINT shipments_client_company_fkey;
+
+ALTER TABLE public.payments
+  VALIDATE CONSTRAINT payments_shipment_company_fkey;
+
+ALTER TABLE public.shipment_comments
+  VALIDATE CONSTRAINT shipment_comments_shipment_company_fkey;
+
+ALTER TABLE public.shipment_documents
+  VALIDATE CONSTRAINT shipment_documents_shipment_company_fkey;
+
+ALTER TABLE public.shipment_timeline
+  VALIDATE CONSTRAINT shipment_timeline_shipment_company_fkey;
