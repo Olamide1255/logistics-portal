@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { ShieldCheck, Plus, Building2, Loader2, Trash2, Ban, CheckCircle, Package, Users, Crown } from 'lucide-react';
+import { ShieldCheck, Plus, Building2, Loader2, Ban, CheckCircle, Package, Users, Crown } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
 export default function PlatformAdmin() {
@@ -65,35 +65,36 @@ export default function PlatformAdmin() {
       
       if (companyError) throw companyError;
 
-      const res = await fetch('/api/invite-admin', {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Your session has expired. Please sign in again.');
+      }
+
+      const res = await fetch('/api/invite', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: newAdminEmail, companyId: newCompany.id })
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          email: newAdminEmail,
+          role: 'Super Admin',
+          department: 'Management',
+          companyId: newCompany.id,
+        }),
       });
 
       const inviteData = await res.json();
-      if (!res.ok) throw new Error(inviteData.error);
+      if (!res.ok) throw new Error(inviteData.error || 'Unable to invite the company administrator. The company remains listed so you can retry safely.');
       
       toast.success(`Company created and invite sent to ${newAdminEmail}!`);
       fetchPlatformData(); 
       setNewCompanyName('');
       setNewAdminEmail('');
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Company onboarding failed. If the company was created, it remains available for a safe invitation retry.');
     } finally {
       setIsCreating(false);
-    }
-  };
-
-  const handleDeleteCompany = async (companyId: string, companyName: string) => {
-    if (!window.confirm(`DANGER: Are you sure you want to delete "${companyName}" and ALL its data?`)) return;
-    try {
-      const { error } = await supabase.from('companies').delete().eq('id', companyId);
-      if (error) throw error;
-      toast.success(`Company deleted.`);
-      fetchPlatformData();
-    } catch (error: any) {
-      toast.error(error.message);
     }
   };
 
@@ -208,10 +209,7 @@ export default function PlatformAdmin() {
                       <button onClick={() => toggleCompanyStatus(c.id, c.status)} className={`p-2 rounded-lg ${c.status === 'Active' ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'}`} title={c.status === 'Active' ? 'Suspend' : 'Activate'}>
                         {c.status === 'Active' ? <Ban size={18} /> : <CheckCircle size={18} />}
                       </button>
-                      <button onClick={() => handleDeleteCompany(c.id, c.name)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg opacity-0 group-hover:opacity-100" title="Delete">
-                        <Trash2 size={18} />
-                      </button>
-                    </td>
+                                    </td>
                   </tr>
                 );
               })}
