@@ -13,7 +13,7 @@ async function signIn(page: import('@playwright/test').Page, email: string, pass
 }
 
 test('Platform Admin can navigate, reload, see both tenant fixtures and sign out cleanly', async ({ page }) => {
-  test.skip(!process.env.E2E_BASE_URL || !platformEmail || !platformPassword, 'Dedicated staging Platform Admin credentials are not configured.');
+  test.skip(!platformEmail || !platformPassword, 'Dedicated staging Platform Admin credentials are not configured.');
   await signIn(page, platformEmail!, platformPassword!);
   await expect(page).toHaveURL(/\/platform(?:$|\?)/);
   await expect(page.getByRole('heading', { name: 'SaaS Dashboard' })).toBeVisible();
@@ -39,7 +39,7 @@ test('Platform Admin can navigate, reload, see both tenant fixtures and sign out
 });
 
 test('Tenant user sees its own shipments but cannot see another tenant', async ({ page }) => {
-  test.skip(!process.env.E2E_BASE_URL || !tenantEmail || !tenantPassword, 'Dedicated staging tenant credentials are not configured.');
+  test.skip(!tenantEmail || !tenantPassword, 'Dedicated staging tenant credentials are not configured.');
   await signIn(page, tenantEmail!, tenantPassword!);
   await expect(page).toHaveURL(/\/dashboard(?:$|\?)/);
 
