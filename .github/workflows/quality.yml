@@ -40,6 +40,9 @@ jobs:
         run: npm run build
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+      - name: Run API authorization smoke tests
+        run: npm run test:e2e -- e2e/security-api.api.spec.ts
+
       - name: Run local browser smoke tests
         run: npm run test:e2e -- e2e/smoke.spec.ts
       - name: Run authenticated staging journeys
