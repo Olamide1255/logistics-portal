@@ -55,6 +55,7 @@ export default function PlatformAdmin() {
     e.preventDefault();
     if (!newCompanyName || !newAdminEmail) return toast.error("Please fill all fields.");
     setIsCreating(true);
+    let createdCompanyId: string | null = null;
 
     try {
       const { data: newCompany, error: companyError } = await supabase
@@ -91,8 +92,12 @@ export default function PlatformAdmin() {
       fetchPlatformData(); 
       setNewCompanyName('');
       setNewAdminEmail('');
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      if (createdCompanyId) {
+        const { error: cleanupError } = await supabase.from('companies').delete().eq('id', createdCompanyId);
+        if (cleanupError) console.error('Could not clean up the company after invitation failure:', cleanupError);
+      }
+      toast.error(error instanceof Error ? error.message : 'Company onboarding failed.');
     } finally {
       setIsCreating(false);
     }
