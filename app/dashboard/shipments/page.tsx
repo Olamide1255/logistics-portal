@@ -15,23 +15,29 @@ export default function ShipmentsList() {
   const [hasMore, setHasMore] = useState(true);
   const PAGE_SIZE = 15;
 
-  // Fetch User Role
+  // Authorization comes from the protected profile record, never email naming conventions.
   useEffect(() => {
-    const getUser = async () => {
+    const getUserRole = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email) {
-        const prefix = user.email.split('@')[0].toLowerCase();
-        let role = 'Unknown';
-        if (prefix.includes('admin') || prefix.includes('it')) role = 'Super Admin';
-        else if (prefix.includes('finance')) role = 'Finance';
-        else if (prefix.includes('cs') || prefix.includes('info')) role = 'Customer Service';
-        else if (prefix.includes('rfs')) role = 'RFS';
-        else if (prefix.includes('ops')) role = 'Operations';
-        else if (prefix.includes('freight')) role = 'Freight';
-        setUserRole(role);
+      if (!user) {
+        setUserRole('Unknown');
+        return;
       }
+
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('role, is_platform_admin')
+        .eq('id', user.id)
+        .single();
+
+      if (error || !profile) {
+        setUserRole('Unknown');
+        return;
+      }
+
+      setUserRole(profile.is_platform_admin ? 'Platform Admin' : profile.role || 'Unknown');
     };
-    getUser();
+    getUserRole();
   }, []);
 
   // Fetch Data (Server-side search and pagination)
