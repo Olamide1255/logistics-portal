@@ -96,11 +96,12 @@ export async function POST(req: Request) {
 
     if (companyError || !company) return NextResponse.json({ error: 'The selected company does not exist.' }, { status: 404 });
 
-    const { success, retryAfterMs } = await rateLimit(
-      `invite:${caller.id}:${getClientIP(req)}`,
-      10,
-      60 * 60 * 1000,
-    );
+    const [userLimit, ipLimit] = await Promise.all([
+      rateLimit('invite:user:' + caller.id, 10, 60 * 60 * 1000),
+      rateLimit('invite:ip:' + getClientIP(req), 30, 60 * 60 * 1000),
+    ]);
+    const success = userLimit.success && ipLimit.success;
+    const retryAfterMs = Math.max(userLimit.retryAfterMs, ipLimit.retryAfterMs);
     if (!success) {
       return NextResponse.json(
         { error: 'Too many invitation attempts. Please try again later.', retryAfterMs },
@@ -133,9 +134,12 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: true, alreadyOnboarded: true });
       }
 
-      // The Auth identity exists without a tenant profile: resend the confirmation email.
-      const { error: resendError } = await admin.auth.resend({ type: 'signup', email });
-      if (resendError) throw new Error(`The account exists but its invitation could not be resent: ${resendError.message}`);
+      // Confirmed identities can be attached without another email. Pending identities
+      // receive a fresh confirmation message before the missing tenant profile is added.
+      if (!existingUser.email_confirmed_at) {
+        const { error: resendError } = await admin.auth.resend({ type: 'signup', email });
+        if (resendError) throw new Error('The account exists but its invitation could not be resent: ' + resendError.message);
+      }
       authUserId = existingUser.id;
     } else {
       const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email);
