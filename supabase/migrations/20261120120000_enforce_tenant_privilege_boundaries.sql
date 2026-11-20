@@ -39,8 +39,8 @@ BEGIN
         USING ERRCODE = '42501';
     END IF;
 
-    IF NEW.role IS DISTINCT FROM OLD.role AND NEW.role = 'Super Admin' THEN
-      RAISE EXCEPTION 'Only a Platform Admin can assign the Super Admin role'
+    IF NEW.role IS DISTINCT FROM OLD.role AND NEW.role IN ('Super Admin', 'Platform Admin') THEN
+      RAISE EXCEPTION 'Only a Platform Admin can assign privileged administrator roles'
         USING ERRCODE = '42501';
     END IF;
   END IF;
@@ -114,6 +114,27 @@ COMMENT ON FUNCTION public.enforce_company_billing_boundaries()
 IS 'Prevents tenant-level users from changing company status or subscription tier.';
 
 
+
+
+-- Harden existing SECURITY DEFINER helpers and audit triggers reported by Supabase.
+-- Helper functions remain executable by signed-in users because RLS policies call them.
+ALTER FUNCTION public.get_my_company_id() SET search_path = pg_catalog, public;
+ALTER FUNCTION public.get_my_role() SET search_path = pg_catalog, public;
+ALTER FUNCTION public.is_platform_admin() SET search_path = pg_catalog, public;
+ALTER FUNCTION public.log_profile_audit() SET search_path = pg_catalog, public;
+ALTER FUNCTION public.log_shipment_audit() SET search_path = pg_catalog, public;
+ALTER FUNCTION public.enforce_shipment_workflow() SET search_path = pg_catalog, public;
+
+REVOKE EXECUTE ON FUNCTION public.get_my_company_id() FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_my_role() FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.is_platform_admin() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_my_company_id() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.get_my_role() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_platform_admin() TO authenticated, service_role;
+
+-- These are trigger-only functions, not client-callable RPC endpoints.
+REVOKE EXECUTE ON FUNCTION public.log_profile_audit() FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public.log_shipment_audit() FROM PUBLIC, anon, authenticated;
 
 -- Enforce document/logo restrictions at the Storage service, not only in the browser.
 UPDATE storage.buckets
