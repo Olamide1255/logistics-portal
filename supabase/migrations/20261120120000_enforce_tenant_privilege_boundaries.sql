@@ -110,19 +110,14 @@ IS 'Prevents tenant-level users from changing company status or subscription tie
 
 
 -- Enforce that linked records always belong to the same tenant as their parent.
--- Existing cross-company mismatch checks returned no rows before this migration was prepared.
+-- Existing cross-company mismatch checks for shipment-linked tables returned no rows.
 -- The composite unique keys must exist before PostgreSQL can accept the composite foreign keys.
+-- The shipments -> clients composite FK is deliberately deferred until its data is checked separately.
 ALTER TABLE public.clients
   ADD CONSTRAINT clients_id_company_id_unique UNIQUE (id, company_id);
 
 ALTER TABLE public.shipments
   ADD CONSTRAINT shipments_id_company_id_unique UNIQUE (id, company_id);
-
-ALTER TABLE public.shipments
-  ADD CONSTRAINT shipments_client_company_fkey
-  FOREIGN KEY (client_id, company_id)
-  REFERENCES public.clients (id, company_id)
-  NOT VALID;
 
 ALTER TABLE public.payments
   ADD CONSTRAINT payments_shipment_company_fkey
@@ -147,9 +142,6 @@ ALTER TABLE public.shipment_timeline
   FOREIGN KEY (shipment_id, company_id)
   REFERENCES public.shipments (id, company_id)
   NOT VALID;
-
-ALTER TABLE public.shipments
-  VALIDATE CONSTRAINT shipments_client_company_fkey;
 
 ALTER TABLE public.payments
   VALIDATE CONSTRAINT payments_shipment_company_fkey;
