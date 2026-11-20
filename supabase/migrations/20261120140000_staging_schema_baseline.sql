@@ -101,7 +101,7 @@ create table public.notifications (
   is_read boolean default false,
   shipment_awb text,
   created_at timestamptz not null default timezone('utc', now()),
-  company_id uuid not null default private.get_my_company_id()
+  company_id uuid not null
     references public.companies(id) on delete cascade
 );
 
@@ -209,6 +209,10 @@ revoke all on function private.is_platform_admin() from public, anon;
 grant execute on function private.get_my_company_id() to authenticated, service_role;
 grant execute on function private.get_my_role() to authenticated, service_role;
 grant execute on function private.is_platform_admin() to authenticated, service_role;
+
+alter table public.notifications alter column company_id set default private.get_my_company_id();
+alter table public.shipment_comments alter column company_id set default private.get_my_company_id();
+alter table public.shipment_timeline alter column company_id set default private.get_my_company_id();
 
 create or replace function public.consume_rate_limit(p_identifier text, p_limit integer, p_window_ms integer)
 returns jsonb language plpgsql security definer
@@ -429,9 +433,7 @@ with check (private.is_platform_admin() or (company_id = private.get_my_company_
 create policy rate_limit_service_role_only on public.rate_limit_buckets for all to service_role using (true) with check (true);
 create policy comments_insert on public.shipment_comments for insert to authenticated with check (company_id = private.get_my_company_id());
 create policy comments_select on public.shipment_comments for select to authenticated using (company_id = private.get_my_company_id());
-create policy docs_delete_platform_only on public.shipment_documents for delete to authenticated using (
-  bucket_id is null and private.is_platform_admin()
-);
+create policy docs_delete_platform_only on public.shipment_documents for delete to authenticated using (private.is_platform_admin());
 create policy docs_insert on public.shipment_documents for insert to authenticated with check (company_id = private.get_my_company_id());
 create policy docs_select on public.shipment_documents for select to authenticated using (company_id = private.get_my_company_id());
 create policy timeline_insert on public.shipment_timeline for insert to authenticated with check (company_id = private.get_my_company_id());
