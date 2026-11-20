@@ -1,18 +1,20 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Settings, Save, Upload, ShieldAlert } from 'lucide-react';
+import { Settings, Save, Upload, ShieldAlert, Bell, Volume2 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
 export default function CompanySettings() {
   const [company, setCompany] = useState<any>(null);
+  const [profileId, setProfileId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   const [formData, setFormData] = useState({
-    name: '', email: '', phone: '', address: ''
+    name: '', email: '', phone: '', address: '',
+    sound_alerts: true, push_notifications: true
   });
 
   useEffect(() => {
@@ -20,8 +22,13 @@ export default function CompanySettings() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Added is_platform_admin to the query to prevent TS errors
-      const { data: profile } = await supabase.from('profiles').select('role, company_id, is_platform_admin').eq('id', user.id).single();
+      setProfileId(user.id);
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, company_id, is_platform_admin, sound_alerts, push_notifications')
+        .eq('id', user.id)
+        .single();
       
       if (profile?.role !== 'Super Admin' && !profile?.is_platform_admin) {
         setIsAuthorized(false);
@@ -35,12 +42,24 @@ export default function CompanySettings() {
         const { data: compData } = await supabase.from('companies').select('*').eq('id', profile.company_id).single();
         
         if (compData) {
-          setCompany(compData);
+          let displayLogo = '/icon-192.png';
+          if (compData.logo_url) {
+            if (compData.logo_url.startsWith('http')) {
+              displayLogo = compData.logo_url;
+            } else {
+              const { data: signedData } = await supabase.storage.from('shipment-documents').createSignedUrl(compData.logo_url, 3600);
+              if (signedData?.signedUrl) displayLogo = signedData.signedUrl;
+            }
+          }
+
+          setCompany({ ...compData, logo_url: displayLogo });
           setFormData({
             name: compData.name || '',
             email: compData.email || '',
             phone: compData.phone || '',
-            address: compData.address || ''
+            address: compData.address || '',
+            sound_alerts: profile.sound_alerts !== false,
+            push_notifications: profile.push_notifications !== false
           });
         }
       }
@@ -51,7 +70,8 @@ export default function CompanySettings() {
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    setFormData({ ...formData, [e.target.name]: value });
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -59,10 +79,27 @@ export default function CompanySettings() {
     if (!company) return toast.error("No company data loaded.");
     
     setSaving(true);
-    const { error } = await supabase.from('companies').update(formData).eq('id', company.id);
     
-    if (error) toast.error("Failed to save: " + error.message);
-    else toast.success("Company settings updated!");
+    // 1. Update Company Info
+    const { error: compError } = await supabase.from('companies').update({
+      name: formData.name, 
+      email: formData.email, 
+      phone: formData.phone, 
+      address: formData.address
+    }).eq('id', company.id);
+    
+    // 2. Update User Preferences
+    const { error: profError } = await supabase.from('profiles').update({
+      sound_alerts: formData.sound_alerts,
+      push_notifications: formData.push_notifications
+    }).eq('id', profileId);
+    
+    if (compError || profError) {
+      toast.error("Failed to save: " + (compError?.message || profError?.message));
+    } else {
+      toast.success("Settings updated successfully!");
+    }
+    
     setSaving(false);
   };
 
@@ -73,18 +110,14 @@ export default function CompanySettings() {
     setUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
-      
-      // 🔒 FIX: Path MUST start with company.id to pass the security policy
       const filePath = `${company.id}/logo-${Date.now()}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage.from('shipment-documents').upload(filePath, file);
       if (uploadError) throw uploadError;
 
-      // 🔒 FIX: Store the file PATH in the database, not the public URL
       const { error: updateError } = await supabase.from('companies').update({ logo_url: filePath }).eq('id', company.id);
       if (updateError) throw updateError;
 
-      // Generate a secure Signed URL for immediate display (valid for 1 hour)
       const { data: signedData } = await supabase.storage.from('shipment-documents').createSignedUrl(filePath, 3600);
       
       setCompany({ ...company, logo_url: signedData?.signedUrl || '' });
@@ -100,7 +133,6 @@ export default function CompanySettings() {
   if (loading) return <div className="p-10 text-center animate-pulse">Loading settings...</div>;
   if (!isAuthorized) return <div className="p-10 text-center text-red-500 font-bold flex items-center justify-center gap-2"><ShieldAlert/> Access Denied. Only Company Admins can view this.</div>;
   
-  // If authorized but no company record was found
   if (!company) return <div className="p-10 text-center text-amber-500 font-bold">No company record found for this account. Please contact the platform administrator.</div>;
 
   return (
@@ -118,7 +150,6 @@ export default function CompanySettings() {
         <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60 h-fit flex flex-col items-center text-center">
           <h2 className="text-lg font-bold text-slate-900 mb-4">Company Logo</h2>
           <div className="w-32 h-32 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden mb-4 relative group">
-            {/* FIXED: Using optional chaining here so it doesn't crash if company is null */}
             {company?.logo_url ? (
               <img src={company.logo_url} alt="Logo" className="w-full h-full object-contain p-2" />
             ) : (
@@ -131,7 +162,7 @@ export default function CompanySettings() {
           </label>
         </div>
 
-        {/* COMPANY DETAILS FORM */}
+        {/* COMPANY DETAILS & PREFERENCES FORM */}
         <div className="md:col-span-2 bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
           <form onSubmit={handleSave} className="space-y-4">
             <div>
@@ -152,6 +183,21 @@ export default function CompanySettings() {
               <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Office Address</label>
               <input type="text" name="address" value={formData.address} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="123 Logistics Way, Lagos" />
             </div>
+            
+            <div className="pt-4 border-t border-slate-100">
+              <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2"><Bell size={16}/> Notification Preferences</h3>
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" name="sound_alerts" checked={formData.sound_alerts} onChange={handleChange} className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500" />
+                  <span className="text-sm font-medium text-slate-700 flex items-center gap-2"><Volume2 size={14}/> Play sound for new alerts</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" name="push_notifications" checked={formData.push_notifications} onChange={handleChange} className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500" />
+                  <span className="text-sm font-medium text-slate-700">Receive background push notifications</span>
+                </label>
+              </div>
+            </div>
+
             <div className="pt-4 border-t border-slate-100">
               <button type="submit" disabled={saving} className="flex items-center justify-center gap-2 w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-all shadow-md">
                 <Save size={18} /> {saving ? 'Saving...' : 'Save Changes'}

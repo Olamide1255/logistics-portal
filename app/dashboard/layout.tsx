@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -20,6 +20,12 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   
+  // User Preferences
+  const [userPreferences, setUserPreferences] = useState({ sound_alerts: true, push_notifications: true });
+  // Use a ref to avoid re-subscribing to realtime when preferences change
+  const preferencesRef = useRef(userPreferences);
+  useEffect(() => { preferencesRef.current = userPreferences; }, [userPreferences]);
+  
   const [pushEnabled, setPushEnabled] = useState<boolean>(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
       return Notification.permission === 'granted';
@@ -31,6 +37,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname(); 
 
   const playNotificationSound = () => {
+    if (!preferencesRef.current.sound_alerts) return;
     const audio = new Audio("data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"+ "1234567890".repeat(20)); 
     audio.volume = 1.0;
     audio.play().catch((e) => console.log('Audio play blocked:', e));
@@ -57,15 +64,19 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       // 1. Fetch Profile
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role, company_id, is_platform_admin')
+        .select('role, company_id, is_platform_admin, sound_alerts, push_notifications')
         .eq('id', user.id)
         .single();
       
       let role = profile?.role || 'Unknown';
       setUserRole(role);
       setIsPlatformAdmin(profile?.is_platform_admin || false);
+      setUserPreferences({
+        sound_alerts: profile?.sound_alerts !== false,
+        push_notifications: profile?.push_notifications !== false
+      });
 
-      // 2. Fetch Company Separately
+      // 2. Fetch Company
       if (profile?.company_id) {
         const { data: comp } = await supabase
           .from('companies')
@@ -82,17 +93,12 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
           }
 
           let displayLogo = '/icon-192.png';
-          
           if (comp.logo_url) {
             if (comp.logo_url.startsWith('http')) {
-              // Legacy: Old public URL
               displayLogo = comp.logo_url;
             } else {
-              // New: File path, generate a Signed URL valid for 1 hour
               const { data: signedData } = await supabase.storage.from('shipment-documents').createSignedUrl(comp.logo_url, 3600);
-              if (signedData?.signedUrl) {
-                displayLogo = signedData.signedUrl;
-              }
+              if (signedData?.signedUrl) displayLogo = signedData.signedUrl;
             }
           }
 
@@ -103,7 +109,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // 3. OneSignal Tagging (Role + Company ID)
+      // 3. OneSignal Tagging
       if (typeof window !== 'undefined') {
         (window as any).OneSignalDeferred = (window as any).OneSignalDeferred || [];
         (window as any).OneSignalDeferred.push(async function(OneSignal: any) {
@@ -129,20 +135,24 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         if (payload.new.role_target !== userRole && payload.new.role_target !== 'ALL') return;
         
         setNotifications((prev) => prev.some(n => n.id === payload.new.id) ? prev : [payload.new, ...prev]);
-        playNotificationSound();
         
-        toast(payload.new.title, { 
-          description: payload.new.message, 
-          duration: 10000, 
-          action: { 
-            label: 'View', 
-            onClick: () => { 
-              if (payload.new.shipment_awb && payload.new.shipment_awb !== 'null') {
-                router.push(`/dashboard/shipments/${encodeURIComponent(payload.new.shipment_awb.trim())}`); 
+        // Respect User Preferences
+        if (preferencesRef.current.sound_alerts) playNotificationSound();
+        
+        if (preferencesRef.current.push_notifications) {
+          toast(payload.new.title, { 
+            description: payload.new.message, 
+            duration: 10000, 
+            action: { 
+              label: 'View', 
+              onClick: () => { 
+                if (payload.new.shipment_awb && payload.new.shipment_awb !== 'null') {
+                  router.push(`/dashboard/shipments/${encodeURIComponent(payload.new.shipment_awb.trim())}`); 
+                } 
               } 
             } 
-          } 
-        });
+          });
+        }
       })
       .subscribe();
 
@@ -245,6 +255,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                   <p className="px-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 mt-6">Company Admin</p>
                   <Link href="/dashboard/employees" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/employees') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Users size={18} /> Employees</Link>
                   <Link href="/dashboard/settings" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/settings') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><Settings size={18} /> Company Settings</Link>
+                  <Link href="/dashboard/audit-logs" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm ${pathname.includes('/dashboard/audit-logs') ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-100'}`}><ShieldCheck size={18} /> Audit Logs</Link>
                 </>
               )}
             </>

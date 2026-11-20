@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { ShieldAlert, FileClock } from 'lucide-react';
+import { ShieldAlert, FileClock, ShieldCheck } from 'lucide-react';
 
 export default function AuditLogs() {
   const [logs, setLogs] = useState<any[]>([]);
@@ -13,7 +13,6 @@ export default function AuditLogs() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // FIXED: Added is_platform_admin to the select query
       const { data: profile } = await supabase.from('profiles').select('role, company_id, is_platform_admin').eq('id', user.id).single();
       
       if (profile?.role !== 'Super Admin' && !profile?.is_platform_admin) {
@@ -40,6 +39,14 @@ export default function AuditLogs() {
           <FileClock className="text-indigo-600" size={32} /> Global Audit Log
         </h1>
         <p className="text-slate-500 mt-1 font-medium">A chronological record of all critical actions in your company.</p>
+      </div>
+
+      <div className="bg-indigo-50 border border-indigo-200 text-indigo-800 p-4 rounded-xl flex items-center gap-3">
+        <ShieldCheck size={24} className="text-indigo-600 shrink-0" />
+        <div>
+          <p className="font-bold text-sm">Immutable Audit Trail</p>
+          <p className="text-xs">These logs are cryptographically protected and cannot be edited or deleted by any user.</p>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
