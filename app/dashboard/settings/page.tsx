@@ -107,9 +107,20 @@ export default function CompanySettings() {
     const file = e.target.files?.[0];
     if (!file || !company) return;
 
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      toast.error('Logo must be a PNG or JPEG image.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Logo must be 10 MB or smaller.');
+      e.target.value = '';
+      return;
+    }
+
     setUploading(true);
     try {
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.type === 'image/png' ? 'png' : 'jpg';
       const filePath = `${company.id}/logo-${Date.now()}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage.from('shipment-documents').upload(filePath, file);
