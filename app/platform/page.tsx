@@ -1,7 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { ShieldCheck, Plus, Building2, Loader2, Ban, CheckCircle, Package, Users, RefreshCw } from 'lucide-react';
+import { ShieldCheck, Plus, Building2, Loader2, Ban, CheckCircle, Package, Users, RefreshCw, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Company = {
@@ -9,6 +9,10 @@ type Company = {
   name: string;
   status: string;
   subscription_tier: string | null;
+  admin_invite_email?: string | null;
+  admin_invite_status?: 'not_sent' | 'pending' | 'sent' | 'failed';
+  admin_invite_error?: string | null;
+  admin_invited_at?: string | null;
   shipments?: { count: number }[];
 };
 
@@ -66,7 +70,7 @@ export default function PlatformAdmin() {
     try {
       const { data: newCompany, error: companyError } = await supabase
         .from('companies')
-        .insert([{ name: newCompanyName.trim(), status: 'Active', subscription_tier: 'Basic' }])
+        .insert([{ name: newCompanyName.trim(), status: 'Active', subscription_tier: 'Basic', admin_invite_email: newAdminEmail.trim().toLowerCase(), admin_invite_status: 'pending' }])
         .select()
         .single();
       if (companyError) throw companyError;
@@ -91,6 +95,29 @@ export default function PlatformAdmin() {
       await fetchPlatformData(true);
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const retryAdminInvite = async (company: Company) => {
+    if (updatingCompanyId || !company.admin_invite_email) return;
+    setUpdatingCompanyId(company.id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Your session has expired. Please sign in again.');
+      const response = await fetch('/api/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+        body: JSON.stringify({ email: company.admin_invite_email, role: 'Super Admin', department: 'Management', companyId: company.id }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'The invitation could not be resent.');
+      toast.success(result.alreadyOnboarded ? 'This administrator is already onboarded.' : 'Invitation sent to ' + company.admin_invite_email + '.');
+      await fetchPlatformData(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to retry the administrator invitation.');
+      await fetchPlatformData(true);
+    } finally {
+      setUpdatingCompanyId(null);
     }
   };
 
@@ -161,11 +188,11 @@ export default function PlatformAdmin() {
             const shipmentCount = company.shipments?.[0]?.count || 0;
             const busy = updatingCompanyId === company.id;
             return <tr key={company.id} className="transition hover:bg-slate-50/70">
-              <td className="whitespace-nowrap px-5 py-4"><p className="text-sm font-bold text-slate-900">{company.name}</p><p className="mt-0.5 text-[11px] text-slate-400">Tenant account</p></td>
+              <td className="whitespace-nowrap px-5 py-4"><p className="text-sm font-bold text-slate-900">{company.name}</p><p className="mt-0.5 text-[11px] text-slate-400">Tenant account</p>{company.admin_invite_email && <p className="mt-1 text-[11px] text-slate-500">{company.admin_invite_email}</p>}{company.admin_invite_status && company.admin_invite_status !== 'not_sent' && <span className={'mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ' + (company.admin_invite_status === 'sent' ? 'bg-emerald-50 text-emerald-700' : company.admin_invite_status === 'failed' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700')}>{company.admin_invite_status === 'sent' ? 'Invite sent' : company.admin_invite_status === 'failed' ? 'Invite needs attention' : 'Invite pending'}</span>}{company.admin_invite_error && <p className="mt-1 max-w-xs text-[11px] text-red-600">{company.admin_invite_error}</p>}</td>
               <td className="whitespace-nowrap px-5 py-4"><span className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-700">{shipmentCount.toLocaleString()} shipments</span></td>
               <td className="whitespace-nowrap px-5 py-4"><div className="relative"><select aria-label={`Subscription plan for ${company.name}`} value={company.subscription_tier || 'Basic'} disabled={Boolean(updatingCompanyId)} onChange={e => void changeTier(company.id, e.target.value)} className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 pr-7 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-500 disabled:opacity-50"><option value="Basic">Basic</option><option value="Pro">Pro</option><option value="Enterprise">Enterprise</option></select>{busy && <Loader2 size={13} className="absolute -right-5 top-2 animate-spin text-indigo-600" />}</div></td>
               <td className="whitespace-nowrap px-5 py-4"><span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${company.status === 'Active' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}><span className={`h-1.5 w-1.5 rounded-full ${company.status === 'Active' ? 'bg-emerald-500' : 'bg-red-500'}`} />{company.status}</span></td>
-              <td className="whitespace-nowrap px-5 py-4 text-right"><button type="button" disabled={Boolean(updatingCompanyId)} onClick={() => void toggleCompanyStatus(company.id, company.status)} title={company.status === 'Active' ? 'Suspend company' : 'Reactivate company'} aria-label={company.status === 'Active' ? `Suspend ${company.name}` : `Reactivate ${company.name}`} className={`inline-flex items-center justify-center rounded-lg p-2 transition disabled:cursor-wait disabled:opacity-40 ${company.status === 'Active' ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'}`}>{busy ? <Loader2 size={18} className="animate-spin" /> : company.status === 'Active' ? <Ban size={18} /> : <CheckCircle size={18} />}</button></td>
+              <td className="whitespace-nowrap px-5 py-4 text-right"><div className="flex items-center justify-end gap-1">{(company.admin_invite_status === 'failed' || company.admin_invite_status === 'pending') && company.admin_invite_email && <button type="button" disabled={Boolean(updatingCompanyId)} onClick={() => void retryAdminInvite(company)} title="Retry administrator invitation" aria-label={'Retry administrator invitation for ' + company.name} className="inline-flex items-center justify-center rounded-lg p-2 text-indigo-600 transition hover:bg-indigo-50 disabled:cursor-wait disabled:opacity-40">{busy ? <Loader2 size={17} className="animate-spin" /> : <Mail size={17} />}</button>}<button type="button" disabled={Boolean(updatingCompanyId)} onClick={() => void toggleCompanyStatus(company.id, company.status)} title={company.status === 'Active' ? 'Suspend company' : 'Reactivate company'} aria-label={company.status === 'Active' ? `Suspend ${company.name}` : `Reactivate ${company.name}`} className={`inline-flex items-center justify-center rounded-lg p-2 transition disabled:cursor-wait disabled:opacity-40 ${company.status === 'Active' ? 'text-amber-600 hover:bg-amber-50' : 'text-emerald-600 hover:bg-emerald-50'}`}>{busy ? <Loader2 size={18} className="animate-spin" /> : company.status === 'Active' ? <Ban size={18} /> : <CheckCircle size={18} />}</button></div></td>
             </tr>;
           })}</tbody>
         </table></div>}
