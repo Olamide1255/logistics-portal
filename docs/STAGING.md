@@ -12,9 +12,9 @@ This project is isolated from production. It contains no production tenant data,
 
 ## Schema and fixtures
 
-The reproducible baseline is in `supabase/migrations/20261120135146_staging_schema_baseline.sql`. The follow-up `20261120135246_optimize_profile_rls_initplan.sql` avoids per-row auth UID evaluation in the profile policy. The prior incremental production migrations are retained under `supabase/migrations/archive/` for history and are not applied as new migrations.
+The staging-only baseline is in `supabase-staging/migrations/20261120135146_staging_schema_baseline.sql`. The follow-up `20261120135246_optimize_profile_rls_initplan.sql` is maintained in both migration paths so the same profile-policy optimization reaches production and staging. The six existing production migrations remain in their original active `supabase/migrations/` path; the staging snapshot is deliberately outside it so production's migration history is not rewritten.
 
-Synthetic fixtures are in `supabase/seed.sql` and can be reloaded with the Supabase CLI seed workflow. Two tenants are created:
+Synthetic fixtures are in `supabase-staging/seed.sql` and can be reloaded with the staging CLI seed workflow. They are not part of the production Supabase configuration. Two tenants are created:
 
 - `Staging Tenant Alpha` — `00000000-0000-4000-8000-000000000001`
 - `Staging Tenant Beta` — `00000000-0000-4000-8000-000000000002`
@@ -60,7 +60,7 @@ In GitHub → repository `Olamide1255/logistics-portal` → Settings → Secrets
 
 Get the publishable key from Supabase Dashboard → Project Settings → API Keys. It is a client key and is safe for the browser; never add a `service_role` key to GitHub Actions or frontend environment variables.
 
-Once these six secrets exist, GitHub Actions builds the app against staging and runs the authenticated browser journeys locally in CI. This avoids needing a paid Supabase branch or a Vercel deployment for each test run. Without these secrets, lint/build and unauthenticated smoke tests still run, and the authenticated job is intentionally skipped.
+To sync and push the staging migration path, run `supabase --workdir supabase-staging link --project-ref wudpgqqicypdipxzsrgj` once, then `supabase --workdir supabase-staging db push`. New production migrations created after the staging baseline must also be mirrored into `supabase-staging/migrations/`; CI checks that the mirrored SQL files match. To refresh synthetic data, run `supabase-staging/seed.sql` in the staging SQL Editor.\n\nOnce these six secrets exist, GitHub Actions builds the app against staging and runs the authenticated browser journeys locally in CI. This avoids needing a paid Supabase branch or a Vercel deployment for each test run. Without these secrets, lint/build and unauthenticated smoke tests still run, and the authenticated job is intentionally skipped.
 
 ## Vercel Preview (optional)
 
