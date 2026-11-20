@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     const department = typeof body?.department === 'string' ? body.department.trim() : '';
     const companyId = typeof body?.companyId === 'string' ? body.companyId : '';
 
-    const allowedTenantRoles = ['Customer Service', 'Freight', 'Finance'];
+    const allowedTenantRoles = ['Customer Service', 'Freight', 'Finance', 'RFS', 'Operations'];
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !companyId || !role) {
       return NextResponse.json({ error: 'Valid email, role, and company are required.' }, { status: 400 });
     }
