@@ -1,12 +1,7 @@
 // Simple in-memory rate limiter
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
-export function rateLimit(identifier: string, limit: number, windowMs: number, req?: Request): { success: boolean; remaining: number } {
-  // BYPASS: If the request comes from Playwright with the secret header, skip rate limiting
-  if (req && req.headers.get('x-test-bypass') === 'logiflow-test-key-123') {
-    return { success: true, remaining: 999 };
-  }
-
+export function rateLimit(identifier: string, limit: number, windowMs: number): { success: boolean; remaining: number } {
   const now = Date.now();
   const record = rateLimitMap.get(identifier);
 
