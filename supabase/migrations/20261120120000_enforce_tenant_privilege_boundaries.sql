@@ -9,7 +9,7 @@ SET search_path = pg_catalog, public
 AS $$
 BEGIN
   -- Trusted backend/service-role operations remain able to provision accounts.
-  IF auth.role() = 'service_role' OR session_user IN ('postgres', 'supabase_admin') THEN
+  IF current_setting('request.jwt.claim.role', true) = 'service_role' OR session_user IN ('postgres', 'supabase_admin') THEN
     RETURN NEW;
   END IF;
 
@@ -62,7 +62,7 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
-  IF auth.role() = 'service_role' OR session_user IN ('postgres', 'supabase_admin') OR public.is_platform_admin() THEN
+  IF current_setting('request.jwt.claim.role', true) = 'service_role' OR session_user IN ('postgres', 'supabase_admin') OR public.is_platform_admin() THEN
     RETURN NEW;
   END IF;
 
@@ -358,14 +358,6 @@ FROM anon;
 -- Audit events are written by trusted SECURITY DEFINER triggers only.
 DROP POLICY IF EXISTS audit_insert_system ON public.audit_logs;
 REVOKE INSERT ON TABLE public.audit_logs FROM anon, authenticated;
-
--- Evaluate auth.uid() once per statement instead of once per profile row.
-DROP POLICY IF EXISTS profiles_select_own ON public.profiles;
-CREATE POLICY profiles_select_own
-ON public.profiles
-FOR SELECT
-TO authenticated
-USING ((SELECT auth.uid()) = id);
 
 -- Cover every FK identified by the live Supabase performance advisor.
 CREATE INDEX IF NOT EXISTS idx_audit_logs_company_id ON public.audit_logs(company_id);
