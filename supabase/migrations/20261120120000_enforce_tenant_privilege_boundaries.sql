@@ -231,6 +231,100 @@ USING (
   )
 );
 
+
+-- Consolidate overlapping tenant/platform policies without weakening access.
+DROP POLICY IF EXISTS platform_admin_companies ON public.companies;
+DROP POLICY IF EXISTS companies_select ON public.companies;
+CREATE POLICY companies_select
+ON public.companies
+FOR SELECT
+TO authenticated
+USING (
+  id = (SELECT public.get_my_company_id())
+  OR (SELECT public.is_platform_admin())
+);
+
+DROP POLICY IF EXISTS companies_update ON public.companies;
+CREATE POLICY companies_update
+ON public.companies
+FOR UPDATE
+TO authenticated
+USING (
+  (SELECT public.is_platform_admin())
+  OR (
+    id = (SELECT public.get_my_company_id())
+    AND (SELECT public.get_my_role()) IN ('Super Admin', 'Platform Admin')
+  )
+)
+WITH CHECK (
+  (SELECT public.is_platform_admin())
+  OR (
+    id = (SELECT public.get_my_company_id())
+    AND (SELECT public.get_my_role()) IN ('Super Admin', 'Platform Admin')
+  )
+);
+
+DROP POLICY IF EXISTS companies_insert_platform_admin ON public.companies;
+CREATE POLICY companies_insert_platform_admin
+ON public.companies
+FOR INSERT
+TO authenticated
+WITH CHECK ((SELECT public.is_platform_admin()));
+
+DROP POLICY IF EXISTS companies_delete_platform_admin ON public.companies;
+CREATE POLICY companies_delete_platform_admin
+ON public.companies
+FOR DELETE
+TO authenticated
+USING ((SELECT public.is_platform_admin()));
+
+DROP POLICY IF EXISTS platform_admin_profiles ON public.profiles;
+DROP POLICY IF EXISTS profiles_select_company ON public.profiles;
+DROP POLICY IF EXISTS profiles_select_own ON public.profiles;
+CREATE POLICY profiles_select_scoped
+ON public.profiles
+FOR SELECT
+TO authenticated
+USING (
+  (SELECT public.is_platform_admin())
+  OR company_id = (SELECT public.get_my_company_id())
+  OR id = (SELECT auth.uid())
+);
+
+DROP POLICY IF EXISTS profiles_update_admin ON public.profiles;
+CREATE POLICY profiles_update_admin
+ON public.profiles
+FOR UPDATE
+TO authenticated
+USING (
+  (SELECT public.is_platform_admin())
+  OR (
+    company_id = (SELECT public.get_my_company_id())
+    AND (SELECT public.get_my_role()) IN ('Super Admin', 'Platform Admin')
+  )
+)
+WITH CHECK (
+  (SELECT public.is_platform_admin())
+  OR (
+    company_id = (SELECT public.get_my_company_id())
+    AND (SELECT public.get_my_role()) IN ('Super Admin', 'Platform Admin')
+  )
+);
+
+DROP POLICY IF EXISTS profiles_insert_platform_admin ON public.profiles;
+CREATE POLICY profiles_insert_platform_admin
+ON public.profiles
+FOR INSERT
+TO authenticated
+WITH CHECK ((SELECT public.is_platform_admin()));
+
+DROP POLICY IF EXISTS profiles_delete_platform_admin ON public.profiles;
+CREATE POLICY profiles_delete_platform_admin
+ON public.profiles
+FOR DELETE
+TO authenticated
+USING ((SELECT public.is_platform_admin()));
+
 -- The public shipments view must execute with the caller's privileges so
 -- underlying shipments RLS remains in force for every tenant.
 ALTER VIEW public.shipments_secure SET (security_invoker = true);
