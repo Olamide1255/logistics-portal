@@ -12,8 +12,8 @@ async function signIn(page: import('@playwright/test').Page, email: string, pass
   await page.getByRole('button', { name: /sign in/i }).click();
 }
 
-test('Platform Admin can navigate, reload and sign out cleanly', async ({ page }) => {
-  test.skip(!process.env.E2E_BASE_URL || !platformEmail || !platformPassword, 'Dedicated staging Platform Admin credentials are not configured.');
+test('Platform Admin can navigate, reload, see both tenant fixtures and sign out cleanly', async ({ page }) => {
+  test.skip(!platformEmail || !platformPassword, 'Dedicated staging Platform Admin credentials are not configured.');
   await signIn(page, platformEmail!, platformPassword!);
   await expect(page).toHaveURL(/\/platform(?:$|\?)/);
   await expect(page.getByRole('heading', { name: 'SaaS Dashboard' })).toBeVisible();
@@ -26,6 +26,11 @@ test('Platform Admin can navigate, reload and sign out cleanly', async ({ page }
   await expect(page).toHaveURL(/#onboard-company$/);
   await expect(page.locator('#onboard-company')).toBeInViewport();
 
+  await page.goto('/dashboard/shipments');
+  await expect(page.getByText('STG-ALPHA-0001')).toBeVisible();
+  await expect(page.getByText('STG-BETA-0001')).toBeVisible();
+
+  await page.goto('/platform');
   await page.reload();
   await expect(page.getByRole('heading', { name: 'SaaS Dashboard' })).toBeVisible();
   await page.getByRole('button', { name: /sign out|logout/i }).click();
@@ -33,11 +38,16 @@ test('Platform Admin can navigate, reload and sign out cleanly', async ({ page }
   await expect(page.getByRole('heading', { name: 'Sign in to your workspace' })).toBeVisible();
 });
 
-test('Tenant user can open the dashboard and sign out', async ({ page }) => {
-  test.skip(!process.env.E2E_BASE_URL || !tenantEmail || !tenantPassword, 'Dedicated staging tenant credentials are not configured.');
+test('Tenant user sees its own shipments but cannot see another tenant', async ({ page }) => {
+  test.skip(!tenantEmail || !tenantPassword, 'Dedicated staging tenant credentials are not configured.');
   await signIn(page, tenantEmail!, tenantPassword!);
   await expect(page).toHaveURL(/\/dashboard(?:$|\?)/);
-  await expect(page.getByRole('heading').first()).toBeVisible();
+
+  await page.goto('/dashboard/shipments');
+  await expect(page.getByRole('heading', { name: 'All Shipments' })).toBeVisible();
+  await expect(page.getByText('STG-ALPHA-0001')).toBeVisible();
+  await expect(page.getByText('STG-BETA-0001')).toHaveCount(0);
+
   await page.getByRole('button', { name: /sign out|logout/i }).click();
   await expect(page).toHaveURL(/\/login$/);
 });
