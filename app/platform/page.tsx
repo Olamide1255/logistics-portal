@@ -104,14 +104,28 @@ export default function PlatformAdmin() {
   };
 
   const handleDeleteCompany = async (companyId: string, companyName: string) => {
-    if (!window.confirm(`DANGER: Are you sure you want to delete "${companyName}" and ALL its data?`)) return;
+    if (!window.confirm(`Permanently delete "${companyName}"? This is allowed only when the company has no shipments, clients, payments, documents, or audit records.`)) return;
+
     try {
-      const { error } = await supabase.from('companies').delete().eq('id', companyId);
-      if (error) throw error;
-      toast.success(`Company deleted.`);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Your session has expired. Please sign in again.');
+
+      const response = await fetch('/api/delete-company', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ companyId }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Company deletion failed.');
+
+      toast.success('Company deleted.');
       fetchPlatformData();
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Company deletion failed.');
     }
   };
 
