@@ -54,7 +54,7 @@ BEGIN
         USING ERRCODE = '42501';
     END IF;
     IF NEW.company_id IS DISTINCT FROM OLD.company_id THEN
-      RAISE EXCEPTION 'Only a Platform Admin can change a user's company assignment'
+      RAISE EXCEPTION 'Only a Platform Admin can change a user''s company assignment'
         USING ERRCODE = '42501';
     END IF;
 
