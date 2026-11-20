@@ -132,7 +132,7 @@ export default function PlatformAdmin() {
   ];
 
   return <div className="space-y-7">
-    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+    <div id="overview" className="scroll-mt-24 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
       <div><div className="mb-2 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700"><ShieldCheck size={14} /> GLOBAL PLATFORM CONTROL</div><h1 className="text-3xl font-extrabold tracking-tight text-slate-950">SaaS Dashboard</h1><p className="mt-2 text-sm text-slate-500">Manage tenant companies, monitor platform usage and control access.</p></div>
       <button type="button" onClick={() => void fetchPlatformData(true)} disabled={refreshing} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60">{refreshing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}{refreshing ? 'Refreshing…' : 'Refresh data'}</button>
     </div>
@@ -142,7 +142,7 @@ export default function PlatformAdmin() {
     </div>
 
     <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[340px_minmax(0,1fr)]">
-      <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
+      <section id="onboard-company" className="scroll-mt-24 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
         <div className="mb-5"><div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><Plus size={20} /></div><h2 className="text-lg font-bold text-slate-950">Onboard a company</h2><p className="mt-1 text-sm leading-5 text-slate-500">Create a tenant and invite its first company administrator.</p></div>
         <form onSubmit={handleCreateCompany} className="space-y-4">
           <div><label htmlFor="company-name" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Company name</label><input id="company-name" type="text" value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} disabled={isCreating} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 disabled:opacity-60" placeholder="e.g. Acme Logistics" required /></div>
@@ -152,7 +152,7 @@ export default function PlatformAdmin() {
         </form>
       </section>
 
-      <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+      <section id="tenant-companies" className="scroll-mt-24 min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6"><div><h2 className="font-bold text-slate-950">Tenant companies</h2><p className="mt-0.5 text-xs text-slate-500">Manage subscription and account status</p></div><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-600">{companies.length} total</span></div>
         {companies.length === 0 ? <div className="p-10 text-center"><Building2 size={28} className="mx-auto text-slate-300" /><p className="mt-3 text-sm font-semibold text-slate-700">No tenant companies yet</p><p className="mt-1 text-xs text-slate-500">New companies will appear here after onboarding.</p></div> :
         <div className="overflow-x-auto"><table className="min-w-full divide-y divide-slate-100">
