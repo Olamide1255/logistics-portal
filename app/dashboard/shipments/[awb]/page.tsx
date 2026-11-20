@@ -134,9 +134,16 @@ export default function ShipmentDetails() {
       }]);
       if (error) throw error;
 
-      // Auto-approve shipment if fully paid
+      // Auto-approve shipment if fully paid. A payment remains recorded even
+      // if the separate shipment-status update needs an administrator's attention.
       if (totalPaid + parseFloat(paymentAmount) >= agreedAmount) {
-        await supabase.from('shipments').update({ payment_status: 'Approved' }).eq('id', shipment.id);
+        const { error: approvalError } = await supabase
+          .from('shipments')
+          .update({ payment_status: 'Approved' })
+          .eq('id', shipment.id);
+        if (approvalError) {
+          toast.warning('Payment was recorded, but the shipment payment status could not be updated.');
+        }
       }
 
       toast.success("Payment recorded successfully!");
@@ -392,12 +399,54 @@ export default function ShipmentDetails() {
     if (!actionBy) return alert('Please enter your name.');
     setIsSubmitting(true);
     try {
-      await supabase.from('shipments').update({ payment_status: 'Approved' }).eq('id', shipment.id).eq('payment_status', 'Pending'); 
-      await supabase.from('shipment_timeline').insert([{ shipment_id: shipment.id, status_dropdown: 'Finance Approved', status_notes: 'Payment confirmed.', updated_by_role: userRole, action_by_name: actionBy }]);
-      await supabase.from('notifications').insert([{ role_target: 'Freight', title: 'Action Needed: Book Shipment', message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}. Please book space.`, shipment_awb: shipment.awb_number }]);
-      await supabase.from('notifications').insert([{ role_target: 'Customer Service', title: 'Payment Approved', message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}. Awaiting Freight booking.`, shipment_awb: shipment.awb_number }]);
-      setActionBy(''); await fetchData(); 
-    } catch (error) { alert("Error."); } finally { setIsSubmitting(false); }
+      const { data: updatedShipment, error: approvalError } = await supabase
+        .from('shipments')
+        .update({ payment_status: 'Approved' })
+        .eq('id', shipment.id)
+        .eq('payment_status', 'Pending')
+        .select('id')
+        .maybeSingle();
+      if (approvalError) throw approvalError;
+      if (!updatedShipment) throw new Error('Payment was already approved or the shipment could not be updated.');
+
+      const { error: timelineError } = await supabase.from('shipment_timeline').insert([{
+        shipment_id: shipment.id,
+        status_dropdown: 'Finance Approved',
+        status_notes: 'Payment confirmed.',
+        updated_by_role: userRole,
+        action_by_name: actionBy,
+      }]);
+      if (timelineError) {
+        toast.error('Payment was approved, but its timeline entry could not be saved. Contact an administrator.');
+        await fetchData();
+        return;
+      }
+
+      const messages = [
+        {
+          role_target: 'Freight',
+          title: 'Action Needed: Book Shipment',
+          message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}. Please book space.`,
+          shipment_awb: shipment.awb_number,
+        },
+        {
+          role_target: 'Customer Service',
+          title: 'Payment Approved',
+          message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}. Awaiting Freight booking.`,
+          shipment_awb: shipment.awb_number,
+        },
+      ];
+      const { error: notificationError } = await supabase.from('notifications').insert(messages);
+      if (notificationError) toast.warning('Payment approved, but team notifications could not be created.');
+
+      setActionBy('');
+      await fetchData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to approve payment.');
+      await fetchData();
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (loading) return <div className="p-10 text-center text-slate-500 animate-pulse">Loading...</div>;
