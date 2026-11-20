@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Package, PlusCircle, LogOut, LayoutDashboard, Menu, X, Bell, BellRing, Users, WifiOff, Plane, Settings, ShieldCheck } from 'lucide-react';
+import { Package, PlusCircle, LogOut, LayoutDashboard, Menu, X, Bell, BellRing, Users, WifiOff, Plane, Settings, ShieldCheck, Loader2 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { processQueue } from '@/lib/offlineSync';
 
@@ -15,7 +15,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [companyInfo, setCompanyInfo] = useState({ name: 'LogiFlow', logo_url: '/icon-192.png' });
   
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);\n  const [isLoggingOut, setIsLoggingOut] = useState(false); 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
@@ -193,7 +193,18 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { setIsSidebarOpen(false); }, [pathname]);
 
-  const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); };
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      window.location.replace('/login');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to sign out. Please try again.');
+      setIsLoggingOut(false);
+    }
+  };
   const markAsRead = async (id: string) => { await supabase.from('notifications').update({ is_read: true }).eq('id', id); setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n)); };
   
   const requestPushPermission = async () => {
@@ -271,7 +282,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         </nav>
         
         <div className="p-4 border-t border-slate-100">
-          <button onClick={handleLogout} className="flex items-center justify-center gap-2 p-2.5 w-full text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl font-medium text-sm"><LogOut size={16} /> Sign out</button>
+          <button onClick={handleLogout} disabled={isLoggingOut} aria-busy={isLoggingOut} className="flex items-center justify-center gap-2 p-2.5 w-full text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl font-medium text-sm disabled:cursor-wait disabled:opacity-60">{isLoggingOut ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />}{isLoggingOut ? 'Signing out…' : 'Sign out'}</button>
         </div>
       </aside>
 
