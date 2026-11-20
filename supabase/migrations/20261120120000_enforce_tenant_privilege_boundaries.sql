@@ -96,7 +96,7 @@ BEGIN
   END IF;
 
   IF NEW.subscription_tier IS DISTINCT FROM OLD.subscription_tier THEN
-    RAISE EXCEPTION 'Only a Platform Admin can change a company's subscription tier'
+    RAISE EXCEPTION 'Only a Platform Admin can change a company''s subscription tier'
       USING ERRCODE = '42501';
   END IF;
 
