@@ -9,12 +9,14 @@ const compat = new FlatCompat({
 
 const eslintConfig = defineConfig([
   ...compat.extends("next/core-web-vitals", "next/typescript"),
-  globalIgnores([
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
-  ]),
+  {
+    // eslint-config-next 15 resolves typescript-eslint 6 in this lockfile.
+    // Its no-unused-expressions wrapper is incompatible with ESLint 9's rule API.
+    rules: {
+      "@typescript-eslint/no-unused-expressions": "off",
+    },
+  },
+  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
 ]);
 
 export default eslintConfig;
