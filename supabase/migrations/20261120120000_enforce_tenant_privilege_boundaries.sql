@@ -104,8 +104,6 @@ FROM anon, authenticated;
 -- Do not expose trigger-function execution as a callable RPC.
 REVOKE ALL ON FUNCTION public.enforce_profile_privilege_boundaries() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.enforce_company_billing_boundaries() FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.enforce_profile_privilege_boundaries() TO authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.enforce_company_billing_boundaries() TO authenticated, service_role;
 
 COMMENT ON FUNCTION public.enforce_profile_privilege_boundaries()
 IS 'Prevents tenant-level users from changing company assignment or platform-admin privileges.';
@@ -135,6 +133,98 @@ GRANT EXECUTE ON FUNCTION public.is_platform_admin() TO authenticated, service_r
 -- These are trigger-only functions, not client-callable RPC endpoints.
 REVOKE EXECUTE ON FUNCTION public.log_profile_audit() FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.log_shipment_audit() FROM PUBLIC, anon, authenticated;
+
+
+-- The public shipments view must execute with the caller's privileges so
+-- underlying shipments RLS remains in force for every tenant.
+ALTER VIEW public.shipments_secure SET (security_invoker = true);
+REVOKE ALL ON TABLE public.shipments_secure FROM anon;
+GRANT SELECT ON TABLE public.shipments_secure TO authenticated;
+
+-- These client inserts intentionally omit company_id; derive it from the
+-- authenticated profile and let the existing RLS WITH CHECK enforce ownership.
+ALTER TABLE public.notifications
+  ALTER COLUMN company_id SET DEFAULT public.get_my_company_id();
+ALTER TABLE public.shipment_comments
+  ALTER COLUMN company_id SET DEFAULT public.get_my_company_id();
+ALTER TABLE public.shipment_timeline
+  ALTER COLUMN company_id SET DEFAULT public.get_my_company_id();
+
+-- No anonymous browser session needs direct privileges on tenant business data.
+REVOKE ALL ON TABLE
+  public.audit_logs,
+  public.clients,
+  public.companies,
+  public.notifications,
+  public.payments,
+  public.profiles,
+  public.shipment_comments,
+  public.shipment_documents,
+  public.shipment_timeline,
+  public.shipments,
+  public.shipments_secure
+FROM anon;
+
+-- Audit events are written by trusted SECURITY DEFINER triggers only.
+DROP POLICY IF EXISTS audit_insert_system ON public.audit_logs;
+REVOKE INSERT ON TABLE public.audit_logs FROM anon, authenticated;
+
+-- Evaluate auth.uid() once per statement instead of once per profile row.
+DROP POLICY IF EXISTS profiles_select_own ON public.profiles;
+CREATE POLICY profiles_select_own
+ON public.profiles
+FOR SELECT
+TO authenticated
+USING ((SELECT auth.uid()) = id);
+
+-- Cover every FK identified by the live Supabase performance advisor.
+CREATE INDEX IF NOT EXISTS idx_audit_logs_company_id ON public.audit_logs(company_id);
+CREATE INDEX IF NOT EXISTS idx_clients_company_id ON public.clients(company_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_company_id ON public.notifications(company_id);
+CREATE INDEX IF NOT EXISTS idx_payments_company_id ON public.payments(company_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_company_id ON public.profiles(company_id);
+CREATE INDEX IF NOT EXISTS idx_shipment_comments_company_id ON public.shipment_comments(company_id);
+CREATE INDEX IF NOT EXISTS idx_shipment_comments_shipment_id ON public.shipment_comments(shipment_id);
+CREATE INDEX IF NOT EXISTS idx_shipment_documents_company_id ON public.shipment_documents(company_id);
+CREATE INDEX IF NOT EXISTS idx_shipment_documents_shipment_id ON public.shipment_documents(shipment_id);
+CREATE INDEX IF NOT EXISTS idx_shipment_documents_shipment_company ON public.shipment_documents(shipment_id, company_id);
+CREATE INDEX IF NOT EXISTS idx_shipment_timeline_company_id ON public.shipment_timeline(company_id);
+CREATE INDEX IF NOT EXISTS idx_shipment_timeline_shipment_id ON public.shipment_timeline(shipment_id);
+CREATE INDEX IF NOT EXISTS idx_shipments_company_id ON public.shipments(company_id);
+
+-- Enforce tenant consistency between shipments and their child records.
+-- Existing live-data checks found no cross-company references.
+ALTER TABLE public.payments
+  ADD CONSTRAINT payments_shipment_company_fkey
+  FOREIGN KEY (shipment_id, company_id)
+  REFERENCES public.shipments(id, company_id)
+  ON DELETE CASCADE NOT VALID;
+ALTER TABLE public.payments VALIDATE CONSTRAINT payments_shipment_company_fkey;
+
+ALTER TABLE public.shipment_comments
+  ADD CONSTRAINT shipment_comments_shipment_company_fkey
+  FOREIGN KEY (shipment_id, company_id)
+  REFERENCES public.shipments(id, company_id)
+  ON DELETE CASCADE NOT VALID;
+ALTER TABLE public.shipment_comments VALIDATE CONSTRAINT shipment_comments_shipment_company_fkey;
+
+ALTER TABLE public.shipment_timeline
+  ADD CONSTRAINT shipment_timeline_shipment_company_fkey
+  FOREIGN KEY (shipment_id, company_id)
+  REFERENCES public.shipments(id, company_id)
+  ON DELETE CASCADE NOT VALID;
+ALTER TABLE public.shipment_timeline VALIDATE CONSTRAINT shipment_timeline_shipment_company_fkey;
+
+-- A shipment may only reference a client belonging to the same tenant.
+ALTER TABLE public.clients
+  ADD CONSTRAINT clients_id_company_unique UNIQUE (id, company_id);
+CREATE INDEX IF NOT EXISTS idx_shipments_client_company ON public.shipments(client_id, company_id);
+ALTER TABLE public.shipments
+  ADD CONSTRAINT shipments_client_company_fkey
+  FOREIGN KEY (client_id, company_id)
+  REFERENCES public.clients(id, company_id)
+  ON DELETE RESTRICT NOT VALID;
+ALTER TABLE public.shipments VALIDATE CONSTRAINT shipments_client_company_fkey;
 
 -- Enforce document/logo restrictions at the Storage service, not only in the browser.
 UPDATE storage.buckets
