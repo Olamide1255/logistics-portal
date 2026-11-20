@@ -748,8 +748,8 @@ export default function ShipmentDetails() {
                     <p className="text-purple-700 font-bold mb-3 flex items-center gap-2"><Anchor size={18}/> Routing Decision</p>
                     <p className="text-xs text-slate-500 mb-3">Did you deliver this locally or are you handing it to Operations for export?</p>
                     <div className="flex gap-2">
-                      <button onClick={() => handleUpdateStatus('Delivered', 'Delivered locally by RFS') disabled={isSubmitting} className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-700 w-1/2">Delivered (Local)</button>
-                      <button onClick={() => handleUpdateStatus('Handed to Ops', 'Handed to Ops for export') disabled={isSubmitting} className="bg-purple-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-purple-700 w-1/2">Handover to Ops</button>
+                      <button onClick={() => handleUpdateStatus('Delivered', 'Delivered locally by RFS')} disabled={isSubmitting} className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-700 w-1/2">Delivered (Local)</button>
+                      <button onClick={() => handleUpdateStatus('Handed to Ops', 'Handed to Ops for export')} disabled={isSubmitting} className="bg-purple-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-purple-700 w-1/2">Handover to Ops</button>
                     </div>
                   </div>
                 )}
@@ -760,9 +760,9 @@ export default function ShipmentDetails() {
                     <p className="text-amber-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Operations Processing</p>
                     <div className="flex flex-col gap-2">
                       {shipment.current_status === 'Handed to Ops' && (
-                        <button onClick={() => handleUpdateStatus('Export Cleared', 'Customs/Export formalities cleared') disabled={isSubmitting} className="bg-amber-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-amber-700 w-full">Mark Export Cleared</button>
+                        <button onClick={() => handleUpdateStatus('Export Cleared', 'Customs/Export formalities cleared')} disabled={isSubmitting} className="bg-amber-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-amber-700 w-full">Mark Export Cleared</button>
                       )}
-                      <button onClick={() => handleUpdateStatus('Handed to Airline', 'Handed over to Airline') disabled={isSubmitting} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-indigo-700 w-full">Handover to Airline</button>
+                      <button onClick={() => handleUpdateStatus('Handed to Airline', 'Handed over to Airline')} disabled={isSubmitting} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-indigo-700 w-full">Handover to Airline</button>
                     </div>
                   </div>
                 )}
