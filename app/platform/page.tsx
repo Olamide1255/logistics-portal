@@ -65,14 +65,27 @@ export default function PlatformAdmin() {
       
       if (companyError) throw companyError;
 
-      const res = await fetch('/api/invite-admin', {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Your session has expired. Please sign in again.');
+      }
+
+      const res = await fetch('/api/invite', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: newAdminEmail, companyId: newCompany.id })
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          email: newAdminEmail,
+          role: 'Super Admin',
+          department: 'Management',
+          companyId: newCompany.id,
+        }),
       });
 
       const inviteData = await res.json();
-      if (!res.ok) throw new Error(inviteData.error);
+      if (!res.ok) throw new Error(inviteData.error || 'Unable to invite the company administrator.');
       
       toast.success(`Company created and invite sent to ${newAdminEmail}!`);
       fetchPlatformData(); 
