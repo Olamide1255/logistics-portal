@@ -112,7 +112,7 @@ create table public.shipment_comments (
   updated_by_role text not null,
   action_by_name text not null,
   created_at timestamptz not null default timezone('utc', now()),
-  company_id uuid not null default private.get_my_company_id()
+  company_id uuid not null
     references public.companies(id) on delete cascade,
   constraint shipment_comments_shipment_company_fkey
     foreign key (shipment_id, company_id)
@@ -141,7 +141,7 @@ create table public.shipment_timeline (
   updated_by_role text not null,
   action_by_name text not null,
   created_at timestamptz not null default timezone('utc', now()),
-  company_id uuid not null default private.get_my_company_id()
+  company_id uuid not null
     references public.companies(id) on delete cascade,
   constraint shipment_timeline_shipment_company_fkey
     foreign key (shipment_id, company_id)
