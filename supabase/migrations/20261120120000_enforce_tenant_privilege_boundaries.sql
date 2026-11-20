@@ -113,3 +113,14 @@ IS 'Prevents tenant-level users from changing company assignment or platform-adm
 COMMENT ON FUNCTION public.enforce_company_billing_boundaries()
 IS 'Prevents tenant-level users from changing company status or subscription tier.';
 
+
+
+-- Enforce document/logo restrictions at the Storage service, not only in the browser.
+UPDATE storage.buckets
+SET
+  file_size_limit = 10485760,
+  allowed_mime_types = ARRAY['application/pdf', 'image/jpeg', 'image/png']
+WHERE id = 'shipment-documents';
+
+-- Uploads use new unique object paths (upsert=false). Tenants do not need object UPDATE.
+DROP POLICY IF EXISTS storage_update_own_company ON storage.objects;
