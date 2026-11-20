@@ -19,6 +19,7 @@
     "sonner": "^2.0.8"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
     "@playwright/test": "^1.65.0",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
