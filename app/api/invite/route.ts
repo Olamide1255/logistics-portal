@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
+import { findAuthUserByEmail } from '@/lib/findAuthUserByEmail';
 
 const ALLOWED_ROLES = ['Customer Service', 'Finance', 'Freight', 'RFS', 'Operations', 'Super Admin'] as const;
 const ALLOWED_DEPARTMENTS = ['Customer Service', 'Finance', 'Freight', 'RFS', 'Operations', 'Management'] as const;
@@ -113,9 +114,7 @@ export async function POST(req: Request) {
 
     // If the first attempt created the Auth user but failed before creating its profile,
     // reuse that pending identity instead of creating a duplicate or deleting the account.
-    const { data: existingUsers, error: listError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    if (listError) throw listError;
-    const existingUser = existingUsers.users.find(user => user.email?.toLowerCase() === email);
+    const existingUser = await findAuthUserByEmail(admin, email);
 
     let authUserId: string;
     if (existingUser) {
