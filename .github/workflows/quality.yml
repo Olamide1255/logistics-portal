@@ -16,6 +16,8 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL || 'https://example.supabase.co' }}
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY || 'ci-placeholder-anon-key' }}
+      STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
       E2E_PLATFORM_ADMIN_EMAIL: ${{ secrets.E2E_PLATFORM_ADMIN_EMAIL }}
       E2E_PLATFORM_ADMIN_PASSWORD: ${{ secrets.E2E_PLATFORM_ADMIN_PASSWORD }}
       E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
@@ -39,5 +41,5 @@ jobs:
       - name: Run local browser smoke tests
         run: npm run test:e2e -- e2e/smoke.spec.ts
       - name: Run authenticated staging journeys
-        if: ${{ secrets.STAGING_SUPABASE_URL != '' && secrets.STAGING_SUPABASE_ANON_KEY != '' && env.E2E_PLATFORM_ADMIN_EMAIL != '' && env.E2E_PLATFORM_ADMIN_PASSWORD != '' && env.E2E_TENANT_EMAIL != '' && env.E2E_TENANT_PASSWORD != '' }}
+        if: ${{ env.STAGING_SUPABASE_URL != '' && env.STAGING_SUPABASE_ANON_KEY != '' && env.E2E_PLATFORM_ADMIN_EMAIL != '' && env.E2E_PLATFORM_ADMIN_PASSWORD != '' && env.E2E_TENANT_EMAIL != '' && env.E2E_TENANT_PASSWORD != '' }}
         run: npm run test:e2e -- e2e/authenticated.spec.ts
