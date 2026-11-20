@@ -135,6 +135,77 @@ REVOKE EXECUTE ON FUNCTION public.log_profile_audit() FROM PUBLIC, anon, authent
 REVOKE EXECUTE ON FUNCTION public.log_shipment_audit() FROM PUBLIC, anon, authenticated;
 
 
+
+-- Enforce the same operational role boundaries in the database that the UI
+-- presents. Super Admin / Platform Admin retain explicit override capability.
+CREATE OR REPLACE FUNCTION public.enforce_shipment_workflow()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $
+DECLARE
+  actor_role text := public.get_my_role();
+BEGIN
+  IF OLD.current_status IS NOT DISTINCT FROM NEW.current_status THEN
+    RETURN NEW;
+  END IF;
+
+  IF current_setting('request.jwt.claim.role', true) = 'service_role'
+     OR actor_role = 'Super Admin'
+     OR public.is_platform_admin() THEN
+    RETURN NEW;
+  END IF;
+
+  IF OLD.current_status = 'Registered' AND NEW.current_status = 'Booked' AND actor_role = 'Freight' THEN
+    RETURN NEW;
+  END IF;
+  IF OLD.current_status = 'Booked' AND NEW.current_status = 'Picked Up' AND actor_role = 'RFS' THEN
+    RETURN NEW;
+  END IF;
+  IF OLD.current_status = 'Picked Up' AND NEW.current_status IN ('Delivered', 'Handed to Ops') AND actor_role = 'RFS' THEN
+    RETURN NEW;
+  END IF;
+  IF OLD.current_status = 'Handed to Ops' AND NEW.current_status IN ('Export Cleared', 'Handed to Airline') AND actor_role = 'Operations' THEN
+    RETURN NEW;
+  END IF;
+  IF OLD.current_status = 'Export Cleared' AND NEW.current_status = 'Handed to Airline' AND actor_role = 'Operations' THEN
+    RETURN NEW;
+  END IF;
+
+  RAISE EXCEPTION 'Role % cannot transition shipment from % to %. Follow the assigned operational workflow.',
+    COALESCE(actor_role, 'Unknown'), OLD.current_status, NEW.current_status
+    USING ERRCODE = '42501';
+END;
+$;
+
+-- Shipment registration is limited to the roles shown in the registration UI.
+DROP POLICY IF EXISTS shipments_insert ON public.shipments;
+CREATE POLICY shipments_insert
+ON public.shipments
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  company_id = (SELECT public.get_my_company_id())
+  AND (
+    (SELECT public.get_my_role()) IN ('Super Admin', 'Customer Service', 'Freight')
+    OR (SELECT public.is_platform_admin())
+  )
+);
+
+-- Freight users are shown the financial ledger in the application.
+DROP POLICY IF EXISTS payments_select ON public.payments;
+CREATE POLICY payments_select
+ON public.payments
+FOR SELECT
+TO authenticated
+USING (
+  company_id = (SELECT public.get_my_company_id())
+  AND (
+    (SELECT public.get_my_role()) IN ('Super Admin', 'Customer Service', 'Finance', 'Freight', 'Platform Admin')
+    OR (SELECT public.is_platform_admin())
+  )
+);
+
 -- The public shipments view must execute with the caller's privileges so
 -- underlying shipments RLS remains in force for every tenant.
 ALTER VIEW public.shipments_secure SET (security_invoker = true);
