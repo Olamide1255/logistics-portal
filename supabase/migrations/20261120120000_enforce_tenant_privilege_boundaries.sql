@@ -9,7 +9,7 @@ SET search_path = pg_catalog, public
 AS $$
 BEGIN
   -- Trusted backend/service-role operations remain able to provision accounts.
-  IF auth.role() = 'service_role' OR auth.role() = 'postgres' THEN
+  IF auth.role() = 'service_role' OR session_user IN ('postgres', 'supabase_admin') THEN
     RETURN NEW;
   END IF;
 
@@ -48,7 +48,7 @@ SECURITY DEFINER
 SET search_path = pg_catalog, public
 AS $$
 BEGIN
-  IF auth.role() = 'service_role' OR auth.role() = 'postgres' OR public.is_platform_admin() THEN
+  IF auth.role() = 'service_role' OR session_user IN ('postgres', 'supabase_admin') OR public.is_platform_admin() THEN
     RETURN NEW;
   END IF;
 
