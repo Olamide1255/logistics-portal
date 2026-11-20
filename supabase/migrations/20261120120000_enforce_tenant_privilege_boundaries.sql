@@ -90,6 +90,8 @@ FROM anon, authenticated;
 -- Do not expose trigger-function execution as a callable RPC.
 REVOKE ALL ON FUNCTION public.enforce_profile_privilege_boundaries() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.enforce_company_billing_boundaries() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.enforce_profile_privilege_boundaries() TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.enforce_company_billing_boundaries() TO authenticated, service_role;
 
 COMMENT ON FUNCTION public.enforce_profile_privilege_boundaries()
 IS 'Prevents tenant-level users from changing company assignment or platform-admin privileges.';
