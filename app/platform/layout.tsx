@@ -14,18 +14,27 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     const verify = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.replace('/login'); return; }
-      const { data: profile, error } = await supabase.from('profiles').select('is_platform_admin').eq('id', user.id).single();
-      if (!active) return;
-      if (error || !profile?.is_platform_admin) { toast.error('Platform administrator access is required.'); router.replace('/dashboard'); return; }
-      setEmail(user.email || ''); setCheckingAccess(false);
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError) throw userError;
+        if (!user) { router.replace('/login'); return; }
+        const { data: profile, error } = await supabase.from('profiles').select('is_platform_admin').eq('id', user.id).single();
+        if (error) throw error;
+        if (!active) return;
+        if (!profile?.is_platform_admin) { router.replace('/dashboard'); return; }
+        setEmail(user.email || '');
+        setCheckingAccess(false);
+      } catch {
+        if (active) router.replace('/login');
+      }
     };
-    verify(); return () => { active = false; };
+    void verify();
+    return () => { active = false; };
   }, [router]);
   useEffect(() => { setMobileNavOpen(false); }, [pathname]);
   const signOut = async () => {
-    if (signingOut) return; setSigningOut(true);
+    if (signingOut) return;
+    setSigningOut(true);
     const { error } = await supabase.auth.signOut();
     if (error) { toast.error(error.message); setSigningOut(false); return; }
     router.replace('/login');
