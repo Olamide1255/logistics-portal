@@ -3,7 +3,7 @@ import { ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
-import { LayoutDashboard, LogOut, Menu, ShieldCheck, Loader2, X } from 'lucide-react';
+import { LayoutDashboard, LogOut, Menu, ShieldCheck, Loader2, X, Building2, PlusCircle } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 export default function PlatformLayout({ children }: { children: ReactNode }) {
   const [checkingAccess, setCheckingAccess] = useState(true);
@@ -44,7 +44,7 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
   return <div className="flex min-h-screen bg-slate-50 text-slate-900"><Toaster position="top-right" richColors closeButton />
     <aside className="hidden w-72 shrink-0 flex-col border-r border-slate-200 bg-white lg:flex">
       <div className="flex h-20 items-center gap-3 border-b border-slate-100 px-6"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"><ShieldCheck size={22} /></div><div><p className="text-base font-extrabold tracking-tight">LogiFlow</p><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-600">Platform Console</p></div></div>
-      <div className="px-4 py-6"><p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Workspace</p>{navLink('/platform')}</div>
+      <div className="px-4 py-6"><p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Workspace</p>{navLink('/platform', 'Overview', <LayoutDashboard size={18} />)}{navLink('/platform#tenant-companies', 'Tenant companies', <Building2 size={18} />)}{navLink('/platform#onboard-company', 'Onboard company', <PlusCircle size={18} />)}</div>
       <div className="mt-auto border-t border-slate-100 p-4"><div className="mb-3 flex items-center gap-3 rounded-xl bg-slate-50 p-3"><div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-indigo-700"><ShieldCheck size={17} /></div><div className="min-w-0"><p className="truncate text-xs font-bold text-slate-800">Platform Admin</p><p className="truncate text-[11px] text-slate-500">{email}</p></div></div><button onClick={signOut} disabled={signingOut} className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-60">{signingOut ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />}{signingOut ? 'Signing out…' : 'Sign out'}</button></div>
     </aside>
     {mobileNavOpen && <button aria-label="Close navigation overlay" onClick={() => setMobileNavOpen(false)} className="fixed inset-0 z-40 bg-slate-950/30 lg:hidden" />}
