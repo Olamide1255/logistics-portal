@@ -113,11 +113,11 @@ IS 'Prevents tenant-level users from changing company status or subscription tie
 -- Existing cross-company mismatch checks for shipment-linked tables returned no rows.
 -- The composite unique keys must exist before PostgreSQL can accept the composite foreign keys.
 -- The shipments -> clients composite FK is deliberately deferred until its data is checked separately.
-ALTER TABLE public.clients
-  ADD CONSTRAINT clients_id_company_id_unique UNIQUE (id, company_id);
+CREATE UNIQUE INDEX IF NOT EXISTS clients_id_company_id_uidx
+  ON public.clients (id, company_id);
 
-ALTER TABLE public.shipments
-  ADD CONSTRAINT shipments_id_company_id_unique UNIQUE (id, company_id);
+CREATE UNIQUE INDEX IF NOT EXISTS shipments_id_company_id_uidx
+  ON public.shipments (id, company_id);
 
 ALTER TABLE public.payments
   ADD CONSTRAINT payments_shipment_company_fkey
