@@ -77,19 +77,36 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         push_notifications: profile?.push_notifications !== false
       });
 
-      // 2. Fetch Company
+      // 2. Check tenant status through a narrowly scoped RPC.
+      // Suspended tenants are intentionally blocked from selecting their company row by RLS,
+      // so the status must be fetched through the self-only status function.
       if (profile?.company_id) {
+        const { data: companyStatus, error: companyStatusError } = await supabase.rpc('get_my_company_status');
+
+        if (companyStatusError) {
+          console.error('Unable to verify company access status:', companyStatusError);
+        }
+
+        if (companyStatus === 'Suspended' && !profile.is_platform_admin) {
+          await supabase.auth.signOut();
+          alert("Your company account has been suspended. Please contact support.");
+          window.location.replace('/login');
+          return;
+        }
+
+        // 3. Fetch Company
         const { data: comp } = await supabase
           .from('companies')
           .select('name, logo_url, status')
           .eq('id', profile.company_id)
           .single();
-          
+
         if (comp) {
+          // Retain this check as a fallback if company-row visibility changes later.
           if (comp.status === 'Suspended' && !profile.is_platform_admin) {
             await supabase.auth.signOut();
             alert("Your company account has been suspended. Please contact support.");
-            router.push('/login');
+            window.location.replace('/login');
             return;
           }
 
