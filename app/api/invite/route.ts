@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     const requestedDepartment = typeof body.department === 'string' ? body.department : '';
     const requestedCompanyId = typeof body.companyId === 'string' ? body.companyId : '';
 
-    if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || email.length > 254) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
       return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 });
     }
     if (!ALLOWED_ROLES.includes(requestedRole as (typeof ALLOWED_ROLES)[number])) {
