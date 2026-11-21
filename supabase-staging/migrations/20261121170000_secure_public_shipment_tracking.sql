@@ -30,7 +30,13 @@ as $function$
     'awb_number', s.awb_number,
     'origin', s.origin,
     'destination', s.destination,
-    'current_status', coalesce(s.current_status, 'In progress'),
+    'current_status', case
+      when s.current_status = any(array[
+        'Registered', 'Booked', 'Picked Up', 'Handed to Ops',
+        'Export Cleared', 'Handed to Airline', 'Delivered'
+      ]::text[]) then s.current_status
+      else 'In progress'
+    end,
     'created_at', s.created_at,
     'expected_delivery_date', null,
     'company', jsonb_build_object(
@@ -48,7 +54,10 @@ as $function$
       from public.shipment_timeline t
       where t.shipment_id = s.id
         and t.company_id = s.company_id
-        and t.status_dropdown is not null
+        and t.status_dropdown = any(array[
+          'Registered', 'Booked', 'Picked Up', 'Handed to Ops',
+          'Export Cleared', 'Handed to Airline', 'Delivered'
+        ]::text[])
     ), '[]'::jsonb)
   )
   from public.shipments s
