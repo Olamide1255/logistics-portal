@@ -2,8 +2,6 @@ import Link from 'next/link';
 import { Package, ArrowRight, ShieldCheck, Zap, Globe, CheckCircle } from 'lucide-react';
 
 export default function LandingPage() {
-  const year = new Date().getFullYear();
-
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
       {/* Navbar */}
@@ -75,7 +73,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="py-8 text-center text-slate-500 text-sm font-medium" suppressHydrationWarning>
-        &copy; {year} LogiFlow SaaS. All rights reserved.
+        &copy; LogiFlow. All rights reserved.
       </footer>
     </div>
   );
