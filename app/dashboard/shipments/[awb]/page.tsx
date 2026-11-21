@@ -51,9 +51,11 @@ export default function ShipmentDetails() {
     if (navigator.onLine) processQueue();
 
     const { data: { user } } = await supabase.auth.getUser();
+    let currentRole = 'Unknown';
     if (user) {
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-      setUserRole(profile?.role || 'Unknown');
+      currentRole = profile?.role || 'Unknown';
+      setUserRole(currentRole);
     }
 
     const { data: shipData, error } = await supabase
@@ -64,8 +66,21 @@ export default function ShipmentDetails() {
     
     if (error) { console.error(error); setLoading(false); return; }
 
-    setShipment(shipData);
-    setEditFormData(shipData);
+    let safeShipment = shipData;
+    const financialRoles = ['Super Admin', 'Customer Service', 'Finance', 'Freight', 'Platform Admin'];
+    if (shipData?.id && financialRoles.includes(currentRole)) {
+      const { data: financials, error: financialError } = await supabase.rpc('get_shipment_financials', {
+        p_shipment_id: shipData.id,
+      });
+      if (financialError) {
+        console.error('Shipment financial details could not be loaded:', financialError);
+      } else if (financials && typeof financials === 'object') {
+        safeShipment = { ...shipData, ...financials };
+      }
+    }
+
+    setShipment(safeShipment);
+    setEditFormData(safeShipment);
 
     if (shipData) {
       const { data: timeData } = await supabase.from('shipment_timeline').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false });
