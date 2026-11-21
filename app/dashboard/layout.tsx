@@ -305,7 +305,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   }, [unreadCount]);
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+    <div className="flex h-screen h-dvh overflow-hidden bg-slate-50 font-sans">
       <Toaster position="top-right" richColors theme="light" closeButton />
       
       {isSidebarOpen && <button type="button" aria-label="Close navigation menu" className="fixed inset-0 z-40 bg-slate-950/30 md:hidden" onClick={() => setIsSidebarOpen(false)} />}
@@ -369,7 +369,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+      <div className="flex h-screen h-dvh min-h-0 flex-1 flex-col overflow-hidden">
         <header className="bg-white/70 backdrop-blur-xl border-b border-slate-200/60 p-4 sticky top-0 z-30 flex items-center justify-between">
           <button type="button" aria-label="Open navigation menu" aria-expanded={isSidebarOpen} aria-controls="dashboard-sidebar" onClick={() => setIsSidebarOpen(true)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 md:hidden"><Menu size={20} /></button>
           <div className="flex items-center gap-3 ml-auto">
@@ -392,7 +392,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                           router.push(`/dashboard/shipments/${encodeURIComponent(n.shipment_awb.trim())}`); 
                         }
                         setShowNotifications(false); 
-                      }} className={`p-4 border-b cursor-pointer hover:bg-slate-50 ${!n.is_read ? 'bg-indigo-50/50' : ''}`}>
+                      }} className={`block w-full border-b p-4 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${!n.is_read ? 'bg-indigo-50/50' : ''}`}>
                         <p className={`text-sm ${!n.is_read ? 'font-bold' : ''}`}>{n.title}</p>
                         <p className="text-xs text-slate-500">{n.message}</p>
                       </button>
@@ -403,7 +403,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-4 md:p-8"><div className="max-w-7xl mx-auto">{children}</div></main>
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-8"><div className="max-w-7xl mx-auto">{children}</div></main>
       </div>
     </div>
   );
