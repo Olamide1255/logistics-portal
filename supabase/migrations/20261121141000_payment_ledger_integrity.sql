@@ -24,6 +24,7 @@ begin
   actor_role := private.get_my_role();
 
   if actor_company_id is null
+     or actor_role is null
      or actor_role not in ('Finance', 'Super Admin') then
     raise exception 'Only Finance or Super Admin users in an active company can record payments'
       using errcode = '42501';
@@ -63,6 +64,32 @@ begin
   end if;
 
   new.currency := upper(coalesce(nullif(btrim(new.currency), ''), shipment_currency));
+  if new.currency !~ '^[A-Z]{3}
+    raise exception 'Payment currency must match the shipment currency'
+      using errcode = '22023';
+  end if;
+
+  if new.reference is not null and length(new.reference) > 255 then
+    raise exception 'Payment reference cannot exceed 255 characters'
+      using errcode = '22001';
+  end if;
+
+  new.company_id := actor_company_id;
+  new.recorded_by := actor_email;
+  new.created_at := now();
+  return new;
+end;
+$function$;
+
+revoke all on function private.enforce_payment_ledger_integrity() from public, anon, authenticated;
+
+drop trigger if exists enforce_payment_ledger_integrity_trigger on public.payments;
+create trigger enforce_payment_ledger_integrity_trigger
+before insert on public.payments
+for each row execute function private.enforce_payment_ledger_integrity(); then
+    raise exception 'Payment currency must be a valid three-letter currency code'
+      using errcode = '22023';
+  end if;
   if new.currency <> shipment_currency then
     raise exception 'Payment currency must match the shipment currency'
       using errcode = '22023';
