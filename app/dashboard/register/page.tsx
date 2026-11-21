@@ -13,21 +13,36 @@ export default function RegisterShipment() {
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
 
   useEffect(() => {
+    let active = true;
+
     const checkRole = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email) {
-        const prefix = user.email.split('@')[0].toLowerCase();
-        // FREIGHT ADDED TO AUTHORIZED ROLES
-        if (prefix.includes('admin') || prefix.includes('it') || prefix.includes('cs') || prefix.includes('info') || prefix.includes('freight')) {
-          setIsAuthorized(true);
-        } else {
-          setIsAuthorized(false);
+      try {
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (authError || !user) {
+          router.replace('/login');
+          return;
         }
-      } else {
-        router.push('/login');
+
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+
+        const allowedRoles = ['Super Admin', 'Customer Service', 'Freight'];
+        if (active) {
+          setIsAuthorized(!profileError && allowedRoles.includes(profile?.role ?? ''));
+        }
+      } catch (accessError) {
+        console.error('Unable to verify shipment registration access:', accessError);
+        if (active) setIsAuthorized(false);
       }
     };
-    checkRole();
+
+    void checkRole();
+    return () => {
+      active = false;
+    };
   }, [router]);
 
   const initialFormState = {
