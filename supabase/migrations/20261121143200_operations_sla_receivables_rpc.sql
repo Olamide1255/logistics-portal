@@ -1,6 +1,6 @@
 create or replace function public.get_operations_report(
-  p_start_date date default (current_date - 29),
-  p_end_date date default current_date
+  p_start_date date default (timezone('Africa/Lagos', now())::date - 29),
+  p_end_date date default timezone('Africa/Lagos', now())::date
 )
 returns jsonb
 language plpgsql
@@ -150,14 +150,14 @@ begin
       currency,
       case
         when report_today - payment_due_date between 1 and 30 then '1–30 days'
-        when current_date - payment_due_date between 31 and 60 then '31–60 days'
-        when current_date - payment_due_date between 61 and 90 then '61–90 days'
+        when report_today - payment_due_date between 31 and 60 then '31–60 days'
+        when report_today - payment_due_date between 61 and 90 then '61–90 days'
         else '91+ days'
       end as age_bucket,
       case
-        when current_date - payment_due_date between 1 and 30 then 1
-        when current_date - payment_due_date between 31 and 60 then 2
-        when current_date - payment_due_date between 61 and 90 then 3
+        when report_today - payment_due_date between 1 and 30 then 1
+        when report_today - payment_due_date between 31 and 60 then 2
+        when report_today - payment_due_date between 61 and 90 then 3
         else 4
       end as sort_order,
       sum(outstanding) as amount,
