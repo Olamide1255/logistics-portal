@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isIP } from 'node:net';
 import { createClient } from '@supabase/supabase-js';
 
 type RateLimitResult = {
@@ -41,8 +42,11 @@ export async function rateLimit(
 }
 
 export function getClientIP(req: Request): string {
-  const forwarded = req.headers.get('x-vercel-forwarded-for')
-    || req.headers.get('x-forwarded-for')
-    || req.headers.get('x-real-ip');
-  return forwarded?.split(',')[0]?.trim() || 'unknown';
+  // On Vercel, use only the platform-provided client-IP header. Do not fall
+  // back to generic forwarding headers: those may be supplied by an
+  // untrusted proxy or caller outside Vercel's trusted request boundary.
+  const platformIP = req.headers.get('x-vercel-forwarded-for')?.trim();
+  if (!platformIP || platformIP.includes(',')) return 'unknown';
+
+  return isIP(platformIP) ? platformIP : 'unknown';
 }
