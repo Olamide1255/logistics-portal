@@ -18,6 +18,7 @@ type Overview = {
     created_in_period: number;
     delivered_in_period: number;
     active_shipments: number;
+    overdue_delivery_shipments: number;
   };
   status_breakdown: CountRow[];
   daily_volume: { day: string; count: number }[];
