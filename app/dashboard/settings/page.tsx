@@ -177,22 +177,22 @@ export default function CompanySettings() {
         <div className="md:col-span-2 bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
           <form onSubmit={handleSave} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Company Name</label>
-              <input type="text" name="name" value={formData.name} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 font-medium" required />
+              <label htmlFor="company-name" className="block text-xs font-bold text-slate-500 uppercase mb-1">Company Name</label>
+              <input type="text" id="company-name" name="name" value={formData.name} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 font-medium" required />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Contact Email</label>
-                <input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="info@company.com" />
+                <label htmlFor="company-email" className="block text-xs font-bold text-slate-500 uppercase mb-1">Contact Email</label>
+                <input type="email" id="company-email" name="email" value={formData.email} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="info@company.com" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Phone Number</label>
-                <input type="text" name="phone" value={formData.phone} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="+234..." />
+                <label htmlFor="company-phone" className="block text-xs font-bold text-slate-500 uppercase mb-1">Phone Number</label>
+                <input type="text" id="company-phone" name="phone" value={formData.phone} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="+234..." />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Office Address</label>
-              <input type="text" name="address" value={formData.address} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="123 Logistics Way, Lagos" />
+              <label htmlFor="company-address" className="block text-xs font-bold text-slate-500 uppercase mb-1">Office Address</label>
+              <input type="text" id="company-address" name="address" value={formData.address} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="123 Logistics Way, Lagos" />
             </div>
             
             <div className="pt-4 border-t border-slate-100">
