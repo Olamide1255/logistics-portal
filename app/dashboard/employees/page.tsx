@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Users, ShieldAlert, Plus, X, Loader2 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
@@ -11,6 +11,8 @@ export default function EmployeeManagement() {
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [companyId, setCompanyId] = useState<string>('');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const [showInvite, setShowInvite] = useState(false);
@@ -19,7 +21,7 @@ export default function EmployeeManagement() {
   const [inviteDept, setInviteDept] = useState('Customer Service');
   const [isInviting, setIsInviting] = useState(false);
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = useCallback(async (targetPage = page) => {
     setLoadError(false);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError) { setLoadError(true); setLoading(false); return; }
@@ -32,7 +34,7 @@ export default function EmployeeManagement() {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('*')
+      .select('role, company_id, is_platform_admin')
       .eq('id', user.id)
       .single();
 
@@ -55,18 +57,22 @@ export default function EmployeeManagement() {
     // Load employees for the authenticated company.
     const { data: emps, error: empsError } = await supabase
       .from('profiles')
-      .select('*', { count: 'exact' })
+      .select('id, email, role, department, is_platform_admin', { count: 'exact' })
       .eq('company_id', profile.company_id)
-      .order('email', { ascending: true });
+      .order('email', { ascending: true })
+      .range(targetPage * PAGE_SIZE, targetPage * PAGE_SIZE + PAGE_SIZE - 1);
     
     if (empsError) setLoadError(true);
-    else setEmployees(emps || []);
+    else {
+      setEmployees(emps || []);
+      setTotalCount(count ?? 0);
+    }
     setLoading(false);
-  };
+  }, [page]);
 
   useEffect(() => {
-    fetchEmployees();
-  }, []);
+    void fetchEmployees(page);
+  }, [fetchEmployees, page]);
 
   const handleUpdate = async (userId: string, field: 'role' | 'department', value: string) => {
     setUpdatingId(userId);
@@ -102,7 +108,8 @@ const res = await fetch('/api/invite', {
       toast.success(`Invite sent to ${inviteEmail}!`);
       setShowInvite(false);
       setInviteEmail('');
-      await fetchEmployees();
+      if (page === 0) await fetchEmployees(0);
+      else setPage(0);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -122,7 +129,7 @@ const res = await fetch('/api/invite', {
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
             <Users className="text-indigo-600" size={32} /> Employee Management
           </h1>
-          <p className="text-slate-500 mt-1 font-medium">Manage access, roles, and departments for your team.</p>
+          <p className="text-slate-500 mt-1 font-medium">Manage access, roles, and departments for your team.</p><p className="mt-1 text-xs text-slate-400">{totalCount.toLocaleString()} team members</p>
         </div>
         <button onClick={() => setShowInvite(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-md">
           <Plus size={18} /> Invite Employee
@@ -181,7 +188,7 @@ const res = await fetch('/api/invite', {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-slate-100">
-            {loadError && <tr><td colSpan={3} className="px-6 py-10 text-center"><p className="font-semibold text-rose-700">Employee records could not be loaded.</p><button type="button" onClick={() => { setLoading(true); void fetchEmployees(); }} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Try again</button></td></tr>}
+            {loadError && <tr><td colSpan={3} className="px-6 py-10 text-center"><p className="font-semibold text-rose-700">Employee records could not be loaded.</p><button type="button" onClick={() => { setLoading(true); void fetchEmployees(page); }} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white">Try again</button></td></tr>}
             {!loadError && employees.length === 0 && <tr><td colSpan={3} className="px-6 py-12 text-center"><div className="font-semibold text-slate-800">No employees found yet</div><p className="mt-1 text-sm text-slate-500">Invite a teammate to start building your workspace team.</p></td></tr>}
             {!loadError && employees.map((emp) => (
               <tr key={emp.id} className="hover:bg-slate-50/80">
@@ -211,6 +218,13 @@ const res = await fetch('/api/invite', {
             ))}
           </tbody>
         </table></div>
+        {totalCount > PAGE_SIZE && <div className="flex flex-col gap-3 border-t border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-slate-500">Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, totalCount)} of {totalCount.toLocaleString()} employees</p>
+          <div className="flex gap-2">
+            <button type="button" disabled={page === 0 || loading} onClick={() => setPage(value => Math.max(0, value - 1))} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-40">Previous</button>
+            <button type="button" disabled={(page + 1) * PAGE_SIZE >= totalCount || loading} onClick={() => setPage(value => value + 1)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-40">Next</button>
+          </div>
+        </div>}
       </div>
     </div>
   );
