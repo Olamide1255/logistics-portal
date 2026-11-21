@@ -10,6 +10,7 @@ set search_path to pg_catalog, public, private
 as $function$
 declare
   result jsonb;
+  report_today date := timezone('Africa/Lagos', now())::date;
 begin
   if coalesce(private.get_my_role(), '') not in ('Finance', 'Super Admin') then
     raise exception 'Insufficient permissions to view financial and operations reports'
@@ -39,8 +40,7 @@ begin
       s.created_at
     from public.shipments s
     where s.company_id = private.get_my_company_id()
-      and s.created_at >= p_start_date::timestamptz
-      and s.created_at < (p_end_date + 1)::timestamptz
+      and timezone('Africa/Lagos', s.created_at)::date between p_start_date and p_end_date
   ),
   status_rows as (
     select
@@ -51,7 +51,7 @@ begin
   ),
   monthly_rows as (
     select
-      date_trunc('month', created_at)::date as period,
+      date_trunc('month', timezone('Africa/Lagos', created_at))::date as period,
       count(*)::bigint as shipment_count
     from scoped_shipments
     group by 1
@@ -77,8 +77,7 @@ begin
       on s.id = p.shipment_id
      and s.company_id = p.company_id
     where p.company_id = private.get_my_company_id()
-      and p.created_at >= p_start_date::timestamptz
-      and p.created_at < (p_end_date + 1)::timestamptz
+      and timezone('Africa/Lagos', p.created_at)::date between p_start_date and p_end_date
     group by 1
   ),
   client_rows as (
@@ -106,15 +105,14 @@ begin
     where s.company_id = private.get_my_company_id()
       and s.current_status = 'Delivered'
       and s.expected_delivery_date is not null
-      and s.delivered_at >= p_start_date::timestamptz
-      and s.delivered_at < (p_end_date + 1)::timestamptz
+      and timezone('Africa/Lagos', s.delivered_at)::date between p_start_date and p_end_date
   ),
   overdue_delivery as (
     select count(*)::bigint as overdue_count
     from public.shipments s
     where s.company_id = private.get_my_company_id()
       and s.current_status is distinct from 'Delivered'
-      and s.expected_delivery_date < current_date
+      and s.expected_delivery_date < report_today
   ),
   payment_totals as (
     select p.shipment_id, p.company_id, sum(p.amount) as total_paid
@@ -151,7 +149,7 @@ begin
     select
       currency,
       case
-        when current_date - payment_due_date between 1 and 30 then '1–30 days'
+        when report_today - payment_due_date between 1 and 30 then '1–30 days'
         when current_date - payment_due_date between 31 and 60 then '31–60 days'
         when current_date - payment_due_date between 61 and 90 then '61–90 days'
         else '91+ days'
@@ -165,7 +163,7 @@ begin
       sum(outstanding) as amount,
       count(*)::bigint as invoice_count
     from open_receivables
-    where outstanding > 0 and payment_due_date < current_date
+    where outstanding > 0 and payment_due_date < report_today
     group by currency, age_bucket, sort_order
   )
   select jsonb_build_object(
