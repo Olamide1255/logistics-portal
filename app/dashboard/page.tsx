@@ -83,6 +83,7 @@ export default function Dashboard() {
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -202,7 +203,7 @@ export default function Dashboard() {
       active = false;
       void supabase.removeChannel(channel);
     };
-  }, []);
+  }, [refreshKey]);
 
   if (loading) {
     return (
@@ -259,7 +260,7 @@ export default function Dashboard() {
         </div>
         <button
           type="button"
-          onClick={() => window.location.reload()}
+          onClick={() => { setRefreshing(true); setRefreshKey((current) => current + 1); }}
           disabled={refreshing}
           className="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60 sm:self-auto"
         >
