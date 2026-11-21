@@ -50,7 +50,7 @@ begin
     group by 1
   ),
   daily_rows as (
-    select created_at::date as day, count(*)::bigint as shipment_count
+    select timezone('Africa/Lagos', created_at)::date as day, count(*)::bigint as shipment_count
     from period_shipments
     group by 1
   ),
