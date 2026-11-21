@@ -10,7 +10,7 @@ export const exportToCSV = (data: any[], filename: string, columns: { key: strin
       const val = row[c.key] ?? '';
       const text = String(val);
       // Spreadsheet cells beginning with formula operators must be escaped.
-      const safeText = typeof val === 'string' && /^[\\u0000-\\u0020]*[=+\\-@]/.test(text)
+      const safeText = typeof val === 'string' && /^[\t\r\n ]*[=+\-@]/.test(text)
         ? `'${text}`
         : text;
       return `"${safeText.replace(/"/g, '""')}"`; // Escape quotes and formula injection
