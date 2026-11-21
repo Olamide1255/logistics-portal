@@ -121,24 +121,26 @@ export default function ShipmentDetails() {
 
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!paymentAmount || !actionBy) return toast.error("Please enter amount and your name.");
+    const amount = Number(paymentAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return toast.error('Enter a valid payment amount greater than zero.');
+    }
     setIsSubmitting(true);
 
     try {
       const { error } = await supabase.from('payments').insert([{
         company_id: shipment.company_id,
         shipment_id: shipment.id,
-        amount: parseFloat(paymentAmount),
+        amount,
         currency: shipment.currency,
         payment_method: paymentMethod,
-        reference: paymentRef,
-        recorded_by: actionBy
+        reference: paymentRef
       }]);
       if (error) throw error;
 
       // Auto-approve shipment if fully paid. A payment remains recorded even
       // if the separate shipment-status update needs an administrator's attention.
-      if (totalPaid + parseFloat(paymentAmount) >= agreedAmount) {
+      if (agreedAmount > 0 && totalPaid + amount >= agreedAmount) {
         const { error: approvalError } = await supabase
           .from('shipments')
           .update({ payment_status: 'Approved' })
@@ -149,6 +151,9 @@ export default function ShipmentDetails() {
       }
 
       toast.success("Payment recorded successfully!");
+      if (agreedAmount <= 0) {
+        toast.info('No agreed shipment amount is set. Payment approval remains a separate finance action.');
+      }
       setShowPaymentModal(false);
       setPaymentAmount('');
       setPaymentRef('');
