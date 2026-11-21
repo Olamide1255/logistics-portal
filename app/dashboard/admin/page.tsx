@@ -52,10 +52,11 @@ export default function AdminUsers() {
 
   if (!isSuperAdmin) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] text-center px-4">
-        <div className="bg-red-50 p-6 rounded-full mb-6"><ShieldAlert size={48} className="text-red-500" /></div>
-        <h1 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h1>
-        <p className="text-slate-500 max-w-md mb-6">Only Super Admins can access this page.</p>
+      <div className="flex min-h-[50vh] flex-col items-center justify-center px-4 text-center">
+        <div className="mb-5 rounded-2xl bg-rose-50 p-5 text-rose-600"><ShieldAlert size={36} /></div>
+        <h1 className="text-xl font-bold text-slate-900">{loadError ? 'We could not verify your access' : 'Access restricted'}</h1>
+        <p className="mt-2 max-w-md text-sm text-slate-500">{loadError ? 'Your user information could not be loaded. Please refresh and try again.' : 'Only a company Super Admin can manage employee roles.'}</p>
+        {loadError && <button type="button" onClick={() => window.location.reload()} className="mt-5 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white">Reload page</button>}
       </div>
     );
   }
