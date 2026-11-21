@@ -43,7 +43,7 @@ export default function PlatformAdmin() {
       const [companiesResult, usersResult, shipmentsResult] = await Promise.all([
         supabase.from('companies').select('*, shipments(count)').order('created_at', { ascending: false }),
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('shipments').select('*', { count: 'exact', head: true }),
+        supabase.from('shipments_secure').select('id', { count: 'exact', head: true }),
       ]);
       if (companiesResult.error) throw companiesResult.error;
       if (usersResult.error) throw usersResult.error;
