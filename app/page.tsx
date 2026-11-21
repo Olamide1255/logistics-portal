@@ -1,17 +1,8 @@
-'use client';
-
-import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Package, ArrowRight, ShieldCheck, Zap, Globe, CheckCircle } from 'lucide-react';
 
 export default function LandingPage() {
-  // Initialize with a static year to prevent build errors
-  const [year, setYear] = useState('2025');
-
-  // Update to the actual year after the component mounts
-  useEffect(() => {
-    setYear(new Date().getFullYear().toString());
-  }, []);
+  const year = new Date().getFullYear();
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans">
@@ -39,10 +30,10 @@ export default function LandingPage() {
       {/* Hero Section */}
       <section className="pt-20 pb-24 px-4 text-center max-w-4xl mx-auto">
         <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 ring-1 ring-indigo-200">
-          <Zap size={14} /> The #1 Logistics Portal for Modern Teams
+          <Zap size={14} /> A connected workspace for logistics teams
         </div>
         <h1 className="text-5xl md:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight mb-6">
-          Stop managing shipments on <span className="text-transparent bg-clip-text bg-linear-to-r from-indigo-600 to-purple-600">WhatsApp.</span>
+          Bring every shipment, handover and update into one workspace.
         </h1>
         <p className="text-lg md:text-xl text-slate-500 mb-10 max-w-2xl mx-auto font-medium leading-relaxed">
           LogiFlow is the all-in-one platform for freight forwarders and clearing agents. Automate handovers, track payments, and manage your RFS and Operations teams from a single dashboard.
@@ -67,7 +58,7 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-3 gap-8">
             {[
               { icon: ShieldCheck, title: "Role-Based Security", desc: "Hide financials from RFS. Restrict deletion to Admins. Every user sees exactly what they need." },
-              { icon: Globe, title: "Real-Time Tracking", desc: "Instant push notifications to the right team the second a shipment is booked or cleared." },
+              { icon: Globe, title: "Real-Time Tracking", desc: "Timely updates help the right teams stay aligned as shipments move through each milestone." },
               { icon: CheckCircle, title: "Document Management", desc: "Upload customs forms, commercial invoices, and proof of pickup directly to the AWB." }
             ].map((feature, i) => (
               <div key={i} className="p-6 rounded-2xl bg-slate-50 border border-slate-100">
