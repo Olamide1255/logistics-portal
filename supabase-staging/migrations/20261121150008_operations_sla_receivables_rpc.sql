@@ -5,7 +5,7 @@ create or replace function public.get_operations_report(
 returns jsonb
 language plpgsql
 stable
-security invoker
+security definer
 set search_path to pg_catalog, public, private
 as $function$
 declare
