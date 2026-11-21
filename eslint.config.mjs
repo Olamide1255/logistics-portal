@@ -1,23 +1,20 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { defineConfig, globalIgnores } from "eslint/config";
-import { FlatCompat } from "@eslint/eslintrc";
-
-const compat = new FlatCompat({
-  baseDirectory: path.dirname(fileURLToPath(import.meta.url)),
-});
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTs from "eslint-config-next/typescript";
 
 const eslintConfig = defineConfig([
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  ...nextVitals,
+  ...nextTs,
   {
     // Keep legacy rules visible without blocking CI on existing technical debt.
-    // The strict TypeScript ESLint wrapper is incompatible with the current lockfile.
     rules: {
       "@typescript-eslint/no-unused-expressions": "off",
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/ban-ts-comment": "warn",
       "prefer-const": "warn",
       "react/no-unescaped-entities": "warn",
+      // Existing data-fetching and subscription effects are migrated incrementally.
+      "react-hooks/set-state-in-effect": "off",
     },
   },
   globalIgnores([
