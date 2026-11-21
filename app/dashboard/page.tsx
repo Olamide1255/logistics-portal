@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import {
-  Activity, ArrowRight, BarChart3, CalendarDays, CheckCircle2, Clock3,
+  Activity, AlertTriangle, ArrowRight, BarChart3, CalendarDays, CheckCircle2, Clock3,
   Loader2, Package, Plane, RefreshCw, ShieldCheck, Truck, Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -231,6 +231,7 @@ export default function Dashboard() {
         <StatCard label="New this period" value={overview?.summary.created_in_period ?? 0} detail="Registered in the last 30 days" icon={CalendarDays} tint="bg-sky-50 text-sky-600" />
         <StatCard label="Active shipments" value={overview?.summary.active_shipments ?? 0} detail="Not currently marked delivered" icon={Truck} tint="bg-amber-50 text-amber-600" />
         <StatCard label="Delivered this period" value={overview?.summary.delivered_in_period ?? 0} detail="Currently marked delivered" icon={CheckCircle2} tint="bg-emerald-50 text-emerald-600" />
+        <StatCard label="Past expected date" value={overview?.summary.overdue_delivery_shipments ?? 0} detail="Active shipments past ETA" icon={AlertTriangle} tint="bg-rose-50 text-rose-600" />
       </section>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
