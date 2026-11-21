@@ -953,7 +953,7 @@ export default function ShipmentDetails() {
               <label htmlFor="shipment-comment-author" className="sr-only">Comment posted under</label><input id="shipment-comment-author" type="text" value={commentBy} readOnly aria-label="Comment posted under authenticated account" className="w-full rounded-lg border border-slate-200 bg-slate-100 p-2 text-sm text-slate-600" />
               <div className="flex gap-2">
                 <input type="text" placeholder="Type a comment..." value={newComment} onChange={e => setNewComment(e.target.value)} className="w-full border border-slate-200 p-2 rounded-lg text-slate-900 bg-white text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" required />
-                <button type="submit" className="bg-slate-900 text-white p-2 rounded-lg hover:bg-slate-800 transition-colors shadow-sm"><Send size={18} /></button>
+                <button type="submit" aria-label="Send shipment comment" disabled={isSubmitting} className="rounded-lg bg-slate-900 p-2 text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"><Send size={18} /></button>
               </div>
             </form>
           </div>
