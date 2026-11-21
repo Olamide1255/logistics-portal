@@ -216,7 +216,15 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
-    const handleOnline = () => { setIsOnline(true); processQueue(); toast.success("Connection restored."); };
+    const handleOnline = () => {
+      setIsOnline(true);
+      void processQueue().then((result) => {
+        if (result.processed > 0) toast.success(`${result.processed} offline comment${result.processed === 1 ? '' : 's'} synced.`);
+        else toast.success('Connection restored.');
+        if (result.pending > 0) toast.warning(`${result.pending} offline comment${result.pending === 1 ? '' : 's'} still need syncing.`);
+        if (result.discarded > 0) toast.error(`${result.discarded} invalid offline item${result.discarded === 1 ? '' : 's'} were discarded.`);
+      }).catch(() => toast.error('Connection restored, but offline comments could not be synced.'));
+    };
     const handleOffline = () => { setIsOnline(false); toast.error("You are offline."); };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
