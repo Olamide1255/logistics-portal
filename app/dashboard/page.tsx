@@ -299,7 +299,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <p className="text-xs leading-5 text-slate-400">Live metrics are tenant-scoped by database access policies. Dashboard activity refreshes when shipment records change. Delivery timeliness and overdue receivables will be introduced only after their underlying dates are modelled.</p>
+      <p className="text-xs leading-5 text-slate-400">Live metrics are tenant-scoped and refresh when shipment records change. SLA and receivables reporting uses expected-delivery and payment-due dates; records without those dates are excluded from the relevant calculations.</p>
     </div>
   );
 }
