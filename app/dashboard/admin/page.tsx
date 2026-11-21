@@ -9,21 +9,26 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     const fetchProfiles = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user?.email) return;
+      setLoadError(false);
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) { setLoadError(true); setLoading(false); return; }
+      setCurrentUserId(user.id);
 
       // Check if current user is Super Admin
-      const { data: myProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-      if (myProfile?.role === 'Super Admin') {
+      const { data: myProfile, error: profileError } = await supabase.from('profiles').select('role, company_id, is_platform_admin').eq('id', user.id).single();
+      if (profileError) { setLoadError(true); setLoading(false); return; }
+      if (myProfile?.role === 'Super Admin' && !myProfile.is_platform_admin) {
         setIsSuperAdmin(true);
 
         // Fetch all users
-        const { data, error } = await supabase.from('profiles').select('*').order('email', { ascending: true });
+        const { data, error } = await supabase.from('profiles').select('id, email, role, is_platform_admin').eq('company_id', myProfile.company_id).order('email', { ascending: true });
         if (data) setProfiles(data);
-        if (error) console.error(error);
+        if (error) { console.error(error); setLoadError(true); }
       }
       setLoading(false);
     };
@@ -68,7 +73,8 @@ export default function AdminUsers() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
+      {loadError && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">User records could not be loaded. <button type="button" onClick={() => { setLoading(true); void (async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) { setLoading(false); return; } const { data: me } = await supabase.from('profiles').select('role, company_id, is_platform_admin').eq('id', user.id).single(); if (me?.role === 'Super Admin' && !me.is_platform_admin) { const { data, error } = await supabase.from('profiles').select('id, email, role, is_platform_admin').eq('company_id', me.company_id).order('email'); if (!error) { setProfiles(data || []); setLoadError(false); } } setLoading(false); })(); }} className="ml-2 font-bold underline">Retry</button></div>}
+      <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60"><div className="overflow-x-auto">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-slate-50/50">
@@ -79,6 +85,7 @@ export default function AdminUsers() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-slate-100">
+              {!loadError && profiles.length === 0 && <tr><td colSpan={3} className="px-6 py-12 text-center text-sm text-slate-500">No employee accounts found for this company yet.</td></tr>}
               {profiles.map((profile) => (
                 <tr key={profile.id} className="hover:bg-slate-50/80 transition-colors">
                   <td className="px-6 py-4 whitespace-nowrap font-medium text-slate-900">{profile.email}</td>
@@ -92,7 +99,7 @@ export default function AdminUsers() {
                       <select 
                         value={profile.role} 
                         onChange={(e) => handleRoleChange(profile.id, e.target.value)}
-                        disabled={updatingId === profile.id || profile.email === 'it@marchloglimited.org.ng'} // Prevent self-lockout
+                        disabled={updatingId === profile.id || profile.id === currentUserId || profile.is_platform_admin} aria-label={`Change role for ${profile.email}`} title={profile.id === currentUserId ? 'You cannot change your own role here.' : profile.is_platform_admin ? 'Platform administrator roles are managed separately.' : 'Change employee role'}
                         className="border border-slate-200 p-2 rounded-lg text-sm text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                       >
                         <option value="Super Admin">Super Admin</option>
@@ -110,7 +117,7 @@ export default function AdminUsers() {
               ))}
             </tbody>
           </table>
-        </div>
+        </div></div>
       </div>
     </div>
   );
