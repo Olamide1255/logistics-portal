@@ -19,7 +19,7 @@ as $function$
       else 'In progress'
     end,
     'created_at', s.created_at,
-    'expected_delivery_date', null,
+    'expected_delivery_date', s.expected_delivery_date,
     'company', jsonb_build_object('name', c.name, 'logo_url', c.logo_url),
     'milestones', coalesce((
       select jsonb_agg(
