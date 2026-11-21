@@ -1,6 +1,6 @@
 create or replace function public.get_operational_overview(
-  p_start_date date default (current_date - 29),
-  p_end_date date default current_date
+  p_start_date date default (timezone('Africa/Lagos', now())::date - 29),
+  p_end_date date default timezone('Africa/Lagos', now())::date
 )
 returns jsonb
 language plpgsql
@@ -40,8 +40,7 @@ begin
   period_shipments as (
     select *
     from all_tenant_shipments
-    where created_at >= p_start_date::timestamptz
-      and created_at < (p_end_date + 1)::timestamptz
+    where timezone('Africa/Lagos', created_at)::date between p_start_date and p_end_date
   ),
   status_rows as (
     select coalesce(nullif(btrim(current_status), ''), 'Unknown') as label,
