@@ -52,7 +52,7 @@ export default function CompanySettings() {
             }
           }
 
-          setCompany({ ...compData, logo_url: displayLogo });
+          setCompany({ ...compData, logo_url: displayLogo, logo_path: compData.logo_url?.startsWith('http') ? null : compData.logo_url || null });
           setFormData({
             name: compData.name || '',
             email: compData.email || '',
@@ -119,22 +119,43 @@ export default function CompanySettings() {
     }
 
     setUploading(true);
+    let uploadedPath: string | null = null;
     try {
       const fileExt = file.type === 'image/png' ? 'png' : 'jpg';
-      const filePath = `${company.id}/logo-${Date.now()}.${fileExt}`;
-      
+      const filePath = `${company.id}/company-logo/logo-${crypto.randomUUID()}.${fileExt}`;
+      uploadedPath = filePath;
+
       const { error: uploadError } = await supabase.storage.from('shipment-documents').upload(filePath, file);
       if (uploadError) throw uploadError;
 
-      const { error: updateError } = await supabase.from('companies').update({ logo_url: filePath }).eq('id', company.id);
+      const { data: signedData, error: signedUrlError } = await supabase.storage
+        .from('shipment-documents')
+        .createSignedUrl(filePath, 3600);
+      if (signedUrlError || !signedData?.signedUrl) {
+        throw signedUrlError || new Error('The new logo could not be previewed securely.');
+      }
+
+      const { error: updateError } = await supabase
+        .from('companies')
+        .update({ logo_url: filePath })
+        .eq('id', company.id);
       if (updateError) throw updateError;
 
-      const { data: signedData } = await supabase.storage.from('shipment-documents').createSignedUrl(filePath, 3600);
-      
-      setCompany({ ...company, logo_url: signedData?.signedUrl || '' });
-      toast.success("Logo updated successfully!");
-    } catch (error: any) {
-      toast.error("Error uploading logo: " + error.message);
+      const previousPath = typeof company.logo_path === 'string' ? company.logo_path : null;
+      setCompany({ ...company, logo_url: signedData.signedUrl, logo_path: filePath });
+      uploadedPath = null;
+      toast.success('Company logo updated successfully.');
+
+      if (previousPath && previousPath !== filePath && !previousPath.startsWith('http')) {
+        const { error: cleanupError } = await supabase.storage.from('shipment-documents').remove([previousPath]);
+        if (cleanupError) toast.warning('Logo updated, but the previous logo file could not be cleaned up.');
+      }
+    } catch (error: unknown) {
+      if (uploadedPath) {
+        const { error: cleanupError } = await supabase.storage.from('shipment-documents').remove([uploadedPath]);
+        if (cleanupError) console.error('Temporary company logo cleanup failed:', cleanupError);
+      }
+      toast.error(error instanceof Error ? error.message : 'Unable to upload the company logo.');
     } finally {
       setUploading(false);
       e.target.value = '';
