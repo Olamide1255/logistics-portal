@@ -83,6 +83,40 @@ The GitHub Actions quality workflow runs migration parity, lint, a production bu
 - The `shipment-documents` bucket is private. Documents are opened through short-lived signed URLs.
 - Platform administration is separate from tenant administration. Never grant platform-admin status to a tenant user to solve a tenant permission issue.
 
+### Notification webhook secrets
+
+Push notification delivery uses a private bearer secret stored in Supabase Vault separately in each environment.
+
+- The database trigger reads `logiflow_webhook_secret` and `notify_function_url` from Vault.
+- The Edge Function retrieves the same secret through `get_notify_webhook_secret()`, which is executable only by the Supabase `service_role`.
+- The function has JWT gateway verification disabled because it performs its own constant-time-equivalent bearer comparison before processing a webhook. Do not expose the service-role key or Vault secret to browser code.
+- The database uses `pg_net` to dispatch the webhook asynchronously. Notification inserts remain committed even if push delivery fails.
+
+For a new project, create the two Vault entries before enabling the notification trigger. Use that project's own function URL:
+
+```sql
+DO $
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM vault.secrets WHERE name = 'logiflow_webhook_secret') THEN
+    PERFORM vault.create_secret(
+      encode(gen_random_bytes(32), 'hex'),
+      'logiflow_webhook_secret',
+      'Private notification webhook bearer secret'
+    );
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM vault.secrets WHERE name = 'notify_function_url') THEN
+    PERFORM vault.create_secret(
+      'https://<project-ref>.supabase.co/functions/v1/notify',
+      'notify_function_url',
+      'Internal notification Edge Function URL'
+    );
+  END IF;
+END $;
+```
+
+Never query or print the decrypted secret in logs, commits, support messages or browser responses. Deploy `supabase/functions/notify` with `verify_jwt=false`; its Vault-backed authentication is mandatory.
+
 ## Application routes
 
 | Route | Purpose |
