@@ -26,7 +26,8 @@ export default function ShipmentDetails() {
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>('');
   const [isOnline, setIsOnline] = useState(true);
-  const [uploading, setUploading] = useState(false);\n  const [trackingToken, setTrackingToken] = useState<string>('');
+  const [uploading, setUploading] = useState(false);
+  const [trackingToken, setTrackingToken] = useState<string>('');
 
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
