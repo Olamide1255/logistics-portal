@@ -285,11 +285,12 @@ export default function ShipmentDetails() {
         const objectPath = bucketIndex >= 0
           ? parsedUrl.pathname.slice(bucketIndex + bucketMarker.length)
           : '';
-        const bucketPrefix = 'shipment-documents/';
-        if (!objectPath.startsWith(bucketPrefix)) {
+        const pathSegments = objectPath.split('/');
+        if (['public', 'sign', 'authenticated'].includes(pathSegments[0])) pathSegments.shift();
+        if (pathSegments.shift() !== 'shipment-documents' || pathSegments.length === 0) {
           throw new Error('This document is not stored in the private shipment bucket.');
         }
-        storagePath = decodeURIComponent(objectPath.slice(bucketPrefix.length));
+        storagePath = decodeURIComponent(pathSegments.join('/'));
       }
 
       const { data, error } = await supabase.storage
