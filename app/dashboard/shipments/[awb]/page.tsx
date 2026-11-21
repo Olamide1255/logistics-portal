@@ -72,6 +72,7 @@ export default function ShipmentDetails() {
     ]);
 
     const user = authResult.data.user;
+    setActionBy(user?.email || '');
     let currentRole = 'Unknown';
     if (user) {
       const { data: profile, error: profileError } = await supabase
@@ -406,23 +407,15 @@ export default function ShipmentDetails() {
   };
 
   const handleFreightBooked = async () => {
-    if (!actionBy) return toast.error('Please enter your name in the Action By field.');
+    if (!actionBy) return toast.error('Your signed-in account could not be verified. Refresh and try again.');
     setIsSubmitting(true);
     try {
-      const { error: statusError } = await supabase
-        .from('shipments')
-        .update({ current_status: 'Booked' })
-        .eq('id', shipment.id);
+      const { error: statusError } = await supabase.rpc('apply_shipment_status_with_timeline', {
+        p_shipment_id: shipment.id,
+        p_status: 'Booked',
+        p_status_notes: 'Freight space secured.',
+      });
       if (statusError) throw statusError;
-
-      const { error: timelineError } = await supabase.from('shipment_timeline').insert([{
-        shipment_id: shipment.id,
-        status_dropdown: 'Booked',
-        status_notes: 'Freight space secured.',
-        updated_by_role: userRole,
-        action_by_name: actionBy,
-      }]);
-      if (timelineError) throw timelineError;
 
       const { error: notificationError } = await supabase.from('notifications').insert([{
         role_target: 'ALL',
@@ -432,7 +425,6 @@ export default function ShipmentDetails() {
       }]);
       if (notificationError) toast.warning('Shipment booked, but the team notification could not be created.');
 
-      setActionBy('');
       await fetchData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to book this shipment.');
@@ -444,27 +436,17 @@ export default function ShipmentDetails() {
 
   const handleUpdateStatus = async (statusToApply = newStatus, notesToApply = statusNotes) => {
     if (!statusToApply) return toast.error('Please select a status.');
-    if (!actionBy) return toast.error('Please enter your name.');
+    if (!actionBy) return toast.error('Your signed-in account could not be verified. Refresh and try again.');
     setIsSubmitting(true);
     try {
-      const { error: statusError } = await supabase
-        .from('shipments')
-        .update({ current_status: statusToApply })
-        .eq('id', shipment.id);
+      // Status and timeline writes commit together; a failed milestone cannot
+      // leave the shipment status changed without its audit trail.
+      const { error: statusError } = await supabase.rpc('apply_shipment_status_with_timeline', {
+        p_shipment_id: shipment.id,
+        p_status: statusToApply,
+        p_status_notes: notesToApply,
+      });
       if (statusError) throw statusError;
-
-      const { error: timelineError } = await supabase.from('shipment_timeline').insert([{
-        shipment_id: shipment.id,
-        status_dropdown: statusToApply,
-        status_notes: notesToApply,
-        updated_by_role: userRole,
-        action_by_name: actionBy,
-      }]);
-      if (timelineError) {
-        toast.error('Shipment status changed, but its timeline entry could not be saved. Contact an administrator.');
-        await fetchData();
-        return;
-      }
 
       const { error: notificationError } = await supabase.from('notifications').insert([{
         role_target: 'ALL',
@@ -476,7 +458,6 @@ export default function ShipmentDetails() {
 
       setNewStatus('');
       setStatusNotes('');
-      setActionBy('');
       await fetchData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to update shipment status.');
@@ -579,31 +560,14 @@ export default function ShipmentDetails() {
   };
 
   const handleApprovePayment = async () => {
-    if (!actionBy) return toast.error('Please enter your name.');
+    if (!actionBy) return toast.error('Your signed-in account could not be verified. Refresh and try again.');
     setIsSubmitting(true);
     try {
-      const { data: updatedShipment, error: approvalError } = await supabase
-        .from('shipments')
-        .update({ payment_status: 'Approved' })
-        .eq('id', shipment.id)
-        .eq('payment_status', 'Pending')
-        .select('id')
-        .maybeSingle();
+      // Approval and its finance timeline event are one atomic database action.
+      const { error: approvalError } = await supabase.rpc('approve_shipment_payment_with_timeline', {
+        p_shipment_id: shipment.id,
+      });
       if (approvalError) throw approvalError;
-      if (!updatedShipment) throw new Error('Payment was already approved or the shipment could not be updated.');
-
-      const { error: timelineError } = await supabase.from('shipment_timeline').insert([{
-        shipment_id: shipment.id,
-        status_dropdown: 'Finance Approved',
-        status_notes: 'Payment confirmed.',
-        updated_by_role: userRole,
-        action_by_name: actionBy,
-      }]);
-      if (timelineError) {
-        toast.error('Payment was approved, but its timeline entry could not be saved. Contact an administrator.');
-        await fetchData();
-        return;
-      }
 
       const messages = [
         {
@@ -622,7 +586,6 @@ export default function ShipmentDetails() {
       const { error: notificationError } = await supabase.from('notifications').insert(messages);
       if (notificationError) toast.warning('Payment approved, but team notifications could not be created.');
 
-      setActionBy('');
       await fetchData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to approve payment.');
