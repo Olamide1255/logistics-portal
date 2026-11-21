@@ -443,8 +443,8 @@ export default function ShipmentDetails() {
   };
 
   const handleUpdateStatus = async (statusToApply = newStatus, notesToApply = statusNotes) => {
-    if (!statusToApply) return alert('Please select a status.');
-    if (!actionBy) return alert('Please enter your name.');
+    if (!statusToApply) return toast.error('Please select a status.');
+    if (!actionBy) return toast.error('Please enter your name.');
     setIsSubmitting(true);
     try {
       const { error: statusError } = await supabase
@@ -638,8 +638,8 @@ export default function ShipmentDetails() {
       <p className="font-semibold text-slate-900">We couldn&apos;t load this shipment.</p>
       <p className="mt-2 text-sm text-slate-500">It may not exist, or the connection may have been interrupted. Your records have not been changed.</p>
       <div className="mt-5 flex justify-center gap-3">
-        <button onClick={() => router.push('/dashboard/shipments')} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Back to shipments</button>
-        <button onClick={() => void fetchData()} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Try again</button>
+        <button type="button" onClick={() => router.push('/dashboard/shipments')} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Back to shipments</button>
+        <button type="button" onClick={() => void fetchData()} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Try again</button>
       </div>
     </div>
   );
@@ -666,20 +666,20 @@ export default function ShipmentDetails() {
           <h1 className="text-sm font-semibold text-slate-500 uppercase tracking-widest hidden md:block">Back to Shipments</h1>
         </div>
         <div className="flex gap-2">
-          <button onClick={generatePDF} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-md font-medium text-sm">
+          <button type="button" onClick={generatePDF} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-md font-medium text-sm">
             <Download size={16} /> Download Manifest
           </button>
           {canEditOrDelete && (
             <>
               {!isEditing ? (
                 <>
-                  <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"><Edit size={16} /> Edit</button>
-                  <button onClick={handleDelete} disabled={isSubmitting} className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 px-4 py-2 rounded-xl hover:bg-red-100 transition-colors shadow-sm font-medium text-sm"><Trash2 size={16} /> Delete</button>
+                  <button type="button" onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"><Edit size={16} /> Edit</button>
+                  <button type="button" onClick={handleDelete} disabled={isSubmitting} className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 px-4 py-2 rounded-xl hover:bg-red-100 transition-colors shadow-sm font-medium text-sm"><Trash2 size={16} /> Delete</button>
                 </>
               ) : (
                 <>
-                  <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"><X size={16} /> Cancel</button>
-                  <button onClick={handleSaveEdit} disabled={isSubmitting} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-600/20 font-medium text-sm"><Save size={16} /> Save</button>
+                  <button type="button" onClick={() => setIsEditing(false)} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"><X size={16} /> Cancel</button>
+                  <button type="button" onClick={handleSaveEdit} disabled={isSubmitting} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-600/20 font-medium text-sm"><Save size={16} /> Save</button>
                 </>
               )}
             </>
@@ -766,7 +766,7 @@ export default function ShipmentDetails() {
               <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-4">
                 <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2"><DollarSign size={20} className="text-emerald-500"/> Financial Ledger</h2>
                 {canRecordPayment && (
-                  <button onClick={() => setShowPaymentModal(true)} className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-md">
+                  <button type="button" onClick={() => setShowPaymentModal(true)} className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-md">
                     <Plus size={16} /> Record Payment
                   </button>
                 )}
@@ -813,13 +813,13 @@ export default function ShipmentDetails() {
                 
                 <div className="mb-6">
                   <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Action By (Your Name) *</label>
-                  <input type="text" placeholder="e.g. John Doe" value={actionBy} onChange={e => setActionBy(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm" />
+                  <input type="text" aria-label="Your name for this shipment action" placeholder="e.g. John Doe" value={actionBy} onChange={e => setActionBy(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm" />
                 </div>
 
                 {shipment.payment_status === 'Pending' && (userRole === 'Finance' || userRole === 'Super Admin') && (
                   <div className="mb-6 p-4 bg-white border border-amber-200 rounded-xl shadow-sm">
                     <p className="text-amber-700 font-bold mb-3 flex items-center gap-2"><Clock size={18}/> Awaiting Finance Approval</p>
-                    <button onClick={handleApprovePayment} disabled={isSubmitting} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-emerald-700 flex items-center gap-2 transition-all shadow-md">
+                    <button type="button" onClick={handleApprovePayment} disabled={isSubmitting} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-emerald-700 flex items-center gap-2 transition-all shadow-md">
                       <CheckCircle size={18} /> {isSubmitting ? 'Processing...' : 'Approve Payment'}
                     </button>
                   </div>
@@ -828,7 +828,7 @@ export default function ShipmentDetails() {
                 {shipment.payment_status === 'Approved' && shipment.current_status === 'Registered' && (userRole === 'Freight' || userRole === 'Super Admin') && (
                   <div className="mb-6 p-4 bg-white border border-blue-200 rounded-xl shadow-sm">
                     <p className="text-blue-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Awaiting Freight Booking</p>
-                    <button onClick={handleFreightBooked} disabled={isSubmitting} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-blue-700 flex items-center gap-2 transition-all shadow-md">
+                    <button type="button" onClick={handleFreightBooked} disabled={isSubmitting} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-blue-700 flex items-center gap-2 transition-all shadow-md">
                       <CheckCircle size={18} /> {isSubmitting ? 'Processing...' : 'Mark as Booked'}
                     </button>
                   </div>
@@ -839,7 +839,7 @@ export default function ShipmentDetails() {
                   <div className="mb-6 p-4 bg-white border border-blue-200 rounded-xl shadow-sm">
                     <p className="text-blue-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Shipment Ready for Pickup</p>
                     <div className="flex flex-col gap-2">
-                       <button onClick={() => handleUpdateStatus('Picked Up', 'Picked up by RFS')} disabled={isSubmitting} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700 w-full">Confirm Pickup</button>
+                       <button type="button" onClick={() => handleUpdateStatus('Picked Up', 'Picked up by RFS')} disabled={isSubmitting} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700 w-full">Confirm Pickup</button>
                     </div>
                   </div>
                 )}
@@ -849,8 +849,8 @@ export default function ShipmentDetails() {
                     <p className="text-purple-700 font-bold mb-3 flex items-center gap-2"><Anchor size={18}/> Routing Decision</p>
                     <p className="text-xs text-slate-500 mb-3">Did you deliver this locally or are you handing it to Operations for export?</p>
                     <div className="flex gap-2">
-                      <button onClick={() => handleUpdateStatus('Delivered', 'Delivered locally by RFS')} disabled={isSubmitting} className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-700 w-1/2">Delivered (Local)</button>
-                      <button onClick={() => handleUpdateStatus('Handed to Ops', 'Handed to Ops for export')} disabled={isSubmitting} className="bg-purple-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-purple-700 w-1/2">Handover to Ops</button>
+                      <button type="button" onClick={() => handleUpdateStatus('Delivered', 'Delivered locally by RFS')} disabled={isSubmitting} className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-700 w-1/2">Delivered (Local)</button>
+                      <button type="button" onClick={() => handleUpdateStatus('Handed to Ops', 'Handed to Ops for export')} disabled={isSubmitting} className="bg-purple-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-purple-700 w-1/2">Handover to Ops</button>
                     </div>
                   </div>
                 )}
@@ -861,9 +861,9 @@ export default function ShipmentDetails() {
                     <p className="text-amber-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Operations Processing</p>
                     <div className="flex flex-col gap-2">
                       {shipment.current_status === 'Handed to Ops' && (
-                        <button onClick={() => handleUpdateStatus('Export Cleared', 'Customs/Export formalities cleared')} disabled={isSubmitting} className="bg-amber-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-amber-700 w-full">Mark Export Cleared</button>
+                        <button type="button" onClick={() => handleUpdateStatus('Export Cleared', 'Customs/Export formalities cleared')} disabled={isSubmitting} className="bg-amber-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-amber-700 w-full">Mark Export Cleared</button>
                       )}
-                      <button onClick={() => handleUpdateStatus('Handed to Airline', 'Handed over to Airline')} disabled={isSubmitting} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-indigo-700 w-full">Handover to Airline</button>
+                      <button type="button" onClick={() => handleUpdateStatus('Handed to Airline', 'Handed over to Airline')} disabled={isSubmitting} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-indigo-700 w-full">Handover to Airline</button>
                     </div>
                   </div>
                 )}
@@ -886,10 +886,10 @@ export default function ShipmentDetails() {
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Additional Notes</label>
-                      <input type="text" placeholder="Optional details..." value={statusNotes} onChange={e => setStatusNotes(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm" />
+                      <input type="text" aria-label="Optional shipment status notes" placeholder="Optional details..." value={statusNotes} onChange={e => setStatusNotes(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm" />
                     </div>
                     <div className="md:col-span-2">
-                      <button onClick={() => handleUpdateStatus()} disabled={isSubmitting} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md">
+                      <button type="button" onClick={() => handleUpdateStatus()} disabled={isSubmitting} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md">
                         {isSubmitting ? 'Updating...' : 'Force Update Status'}
                       </button>
                     </div>
@@ -973,7 +973,7 @@ export default function ShipmentDetails() {
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-slate-800">Record Payment</h3>
-              <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+              <button type="button" onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
             </div>
             <form onSubmit={handleRecordPayment} className="p-6 space-y-4">
               <div>
