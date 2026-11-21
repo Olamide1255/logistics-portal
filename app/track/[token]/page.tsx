@@ -90,6 +90,17 @@ function TrackingContent() {
                 <Plane className="hidden text-indigo-500 sm:block" size={21} />
                 <div className="sm:text-right"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Destination</p><p className="mt-1 text-lg font-bold">{shipment.destination || 'Not specified'}</p></div>
               </div>
+              {shipment.expected_delivery_date && (
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-5 py-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-indigo-600">Estimated delivery</p>
+                    <p className="mt-1 text-base font-extrabold text-slate-900">
+                      {new Intl.DateTimeFormat('en', { dateStyle: 'long' }).format(new Date(`${shipment.expected_delivery_date}T12:00:00`))}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">Target date</span>
+                </div>
+              )}
               <div className="mt-8">
                 <div className="mb-5 flex items-center justify-between"><h2 className="text-lg font-bold">Shipment journey</h2><span className="text-xs text-slate-400">Latest shared milestones</span></div>
                 {shipment.milestones.length ? (
