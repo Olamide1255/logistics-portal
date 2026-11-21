@@ -12,7 +12,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   const fetchDashboardData = async () => {
-    setLoading(true);
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError || !user) return;
@@ -170,7 +169,7 @@ export default function Dashboard() {
 
       <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white">
-          <div><h2 className="text-lg font-bold text-slate-900">My Action Queue</h2><p className="text-sm text-slate-500 mt-1">Shipments currently requiring your attention.</p></div>
+          <div><h2 className="text-lg font-bold text-slate-900">My Action Queue</h2><p className="text-sm text-slate-500 mt-1">Your latest 25 shipments requiring attention. Open Shipments for the full register.</p></div>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-100">
