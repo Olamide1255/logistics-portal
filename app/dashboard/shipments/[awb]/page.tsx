@@ -479,6 +479,8 @@ export default function ShipmentDetails() {
         agreed_amount: editFormData.agreed_amount ? parseFloat(editFormData.agreed_amount) : null,
         rate: editFormData.rate ? parseFloat(editFormData.rate) : null,
         currency: editFormData.currency,
+        expected_delivery_date: editFormData.expected_delivery_date || null,
+        payment_due_date: editFormData.payment_due_date || null,
       }).eq('id', shipment.id);
       if (updateError) throw updateError;
 
