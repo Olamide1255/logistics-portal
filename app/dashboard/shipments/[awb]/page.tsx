@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams, useRouter } from 'next/navigation';
-import { CheckCircle, Clock, MessageSquare, Send, ArrowLeft, Edit, Trash2, Save, X, WifiOff, Plane, Anchor, Paperclip, Upload, FileText, Download, DollarSign, Plus } from 'lucide-react';
+import { CheckCircle, Clock, MessageSquare, Send, ArrowLeft, Edit, Trash2, Save, X, WifiOff, Plane, Anchor, Paperclip, Upload, FileText, Download, DollarSign, Plus, Share2 } from 'lucide-react';
 import Link from 'next/link';
 import { queueAction, processQueue } from '@/lib/offlineSync';
 import { toast, Toaster } from 'sonner';
@@ -26,7 +26,7 @@ export default function ShipmentDetails() {
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string>('');
   const [isOnline, setIsOnline] = useState(true);
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploading] = useState(false);\n  const [trackingToken, setTrackingToken] = useState<string>('');
 
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
@@ -44,6 +44,20 @@ export default function ShipmentDetails() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('Bank Transfer');
   const [paymentRef, setPaymentRef] = useState('');
+
+  const copyTrackingLink = async () => {
+    if (!trackingToken) {
+      toast.error('A tracking link is not available yet.');
+      return;
+    }
+    const url = `${window.location.origin}/track/${trackingToken}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success('Customer tracking link copied.');
+    } catch {
+      toast.error('Could not copy the tracking link. Check browser clipboard permissions.');
+    }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -613,6 +627,9 @@ export default function ShipmentDetails() {
           </div>
         </div>
         <div className="flex flex-col md:flex-row gap-2 md:items-center">
+          <button type="button" onClick={copyTrackingLink} disabled={!trackingToken} className="px-4 py-2 rounded-xl font-bold text-sm inline-flex items-center justify-center gap-2 bg-indigo-600 text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors">
+            <Share2 size={15} /> Share customer tracking
+          </button>
           <div className={`px-4 py-2 rounded-xl font-bold text-sm inline-flex items-center gap-2 ring-1 ring-inset ${shipment.payment_status === 'Approved' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-amber-200'}`}>
             <span className={`w-2 h-2 rounded-full ${shipment.payment_status === 'Approved' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span> Payment: {shipment.payment_status}
           </div>
