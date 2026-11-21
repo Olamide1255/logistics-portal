@@ -14,18 +14,29 @@ export default function RegisterShipment() {
 
   useEffect(() => {
     const checkRole = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email) {
-        const prefix = user.email.split('@')[0].toLowerCase();
-        // FREIGHT ADDED TO AUTHORIZED ROLES
-        if (prefix.includes('admin') || prefix.includes('it') || prefix.includes('cs') || prefix.includes('info') || prefix.includes('freight')) {
-          setIsAuthorized(true);
-        } else {
-          setIsAuthorized(false);
-        }
-      } else {
-        router.push('/login');
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) {
+        router.replace('/login');
+        return;
       }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role, is_platform_admin')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError || !profile) {
+        setIsAuthorized(false);
+        return;
+      }
+
+      // Match the database shipments_insert policy. Email addresses are not
+      // an authorization source and must never grant operational permissions.
+      setIsAuthorized(
+        profile.is_platform_admin === true ||
+        ['Super Admin', 'Customer Service', 'Freight'].includes(profile.role)
+      );
     };
     checkRole();
   }, [router]);
