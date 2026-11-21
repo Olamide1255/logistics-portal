@@ -24,19 +24,17 @@ begin
   actor_role := private.get_my_role();
 
   if actor_company_id is null
-     or actor_role is null
      or actor_role not in ('Finance', 'Super Admin') then
     raise exception 'Only Finance or Super Admin users in an active company can record payments'
       using errcode = '42501';
   end if;
 
-  select p.email
-    into actor_email
+  select p.email into actor_email
   from public.profiles p
   where p.id = actor_id
     and p.company_id = actor_company_id;
 
-  if nullif(btrim(actor_email), '') is null then
+  if actor_email is null then
     raise exception 'An active company profile is required to record payments'
       using errcode = '42501';
   end if;
@@ -46,10 +44,9 @@ begin
       using errcode = '23502';
   end if;
 
-  select
-    s.company_id,
-    upper(coalesce(nullif(btrim(s.currency), ''), 'NGN'))
-  into shipment_company_id, shipment_currency
+  select s.company_id,
+         upper(coalesce(nullif(btrim(s.currency), ''), 'NGN'))
+    into shipment_company_id, shipment_currency
   from public.shipments s
   where s.id = new.shipment_id;
 
@@ -58,38 +55,12 @@ begin
       using errcode = '42501';
   end if;
 
-  if new.amount is null or new.amount <= 0 or new.amount::text in ('NaN', 'Infinity', '-Infinity') then
+  if new.amount is null or new.amount <= 0 then
     raise exception 'Payment amount must be greater than zero'
       using errcode = '22023';
   end if;
 
   new.currency := upper(coalesce(nullif(btrim(new.currency), ''), shipment_currency));
-  if new.currency !~ '^[A-Z]{3}
-    raise exception 'Payment currency must match the shipment currency'
-      using errcode = '22023';
-  end if;
-
-  if new.reference is not null and length(new.reference) > 255 then
-    raise exception 'Payment reference cannot exceed 255 characters'
-      using errcode = '22001';
-  end if;
-
-  new.company_id := actor_company_id;
-  new.recorded_by := actor_email;
-  new.created_at := now();
-  return new;
-end;
-$function$;
-
-revoke all on function private.enforce_payment_ledger_integrity() from public, anon, authenticated;
-
-drop trigger if exists enforce_payment_ledger_integrity_trigger on public.payments;
-create trigger enforce_payment_ledger_integrity_trigger
-before insert on public.payments
-for each row execute function private.enforce_payment_ledger_integrity(); then
-    raise exception 'Payment currency must be a valid three-letter currency code'
-      using errcode = '22023';
-  end if;
   if new.currency <> shipment_currency then
     raise exception 'Payment currency must match the shipment currency'
       using errcode = '22023';
