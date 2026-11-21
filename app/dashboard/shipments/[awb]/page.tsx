@@ -271,17 +271,25 @@ export default function ShipmentDetails() {
       let storagePath = document.file_path || document.file_url;
       if (!storagePath) throw new Error('This document has no stored file path.');
 
-      // Older records may contain a Supabase object URL instead of a storage path.
+      // Legacy records may contain a Supabase Storage URL. Never navigate to
+      // arbitrary external URLs from a database-backed document reference.
       if (/^https?:\/\//i.test(storagePath)) {
-        const bucketMarker = '/shipment-documents/';
-        const bucketIndex = storagePath.indexOf(bucketMarker);
-        if (bucketIndex >= 0) {
-          storagePath = decodeURIComponent(storagePath.slice(bucketIndex + bucketMarker.length).split('?')[0]);
-        } else {
-          if (newWindow) newWindow.location.href = storagePath;
-          else window.location.assign(storagePath);
-          return;
+        const parsedUrl = new URL(storagePath);
+        const configuredUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        if (!configuredUrl || parsedUrl.origin !== new URL(configuredUrl).origin) {
+          throw new Error('This document reference is not a trusted storage URL.');
         }
+
+        const bucketMarker = '/storage/v1/object/';
+        const bucketIndex = parsedUrl.pathname.indexOf(bucketMarker);
+        const objectPath = bucketIndex >= 0
+          ? parsedUrl.pathname.slice(bucketIndex + bucketMarker.length)
+          : '';
+        const bucketPrefix = 'shipment-documents/';
+        if (!objectPath.startsWith(bucketPrefix)) {
+          throw new Error('This document is not stored in the private shipment bucket.');
+        }
+        storagePath = decodeURIComponent(objectPath.slice(bucketPrefix.length));
       }
 
       const { data, error } = await supabase.storage
