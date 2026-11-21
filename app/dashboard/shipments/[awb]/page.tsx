@@ -521,39 +521,55 @@ export default function ShipmentDetails() {
   };
 
   const handleSaveEdit = async () => {
+    const weight = Number(editFormData.weight);
+    const agreedAmount = editFormData.agreed_amount === '' || editFormData.agreed_amount == null
+      ? null
+      : Number(editFormData.agreed_amount);
+    const rate = editFormData.rate === '' || editFormData.rate == null
+      ? null
+      : Number(editFormData.rate);
+
+    if (!Number.isFinite(weight) || weight <= 0) {
+      toast.error('Enter a valid shipment weight greater than zero.');
+      return;
+    }
+    if (agreedAmount !== null && (!Number.isFinite(agreedAmount) || agreedAmount < 0)) {
+      toast.error('Enter a valid agreed amount.');
+      return;
+    }
+    if (rate !== null && (!Number.isFinite(rate) || rate < 0)) {
+      toast.error('Enter a valid shipment rate.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const { error: updateError } = await supabase.from('shipments').update({
-        sender_details: editFormData.sender_details,
-        receiver_details: editFormData.receiver_details,
-        weight: parseFloat(editFormData.weight),
-        dimensions: editFormData.dimensions,
-        origin: editFormData.origin,
-        destination: editFormData.destination,
-        commodity_type: editFormData.commodity_type,
-        shipment_type: editFormData.shipment_type,
-        service_type: editFormData.service_type,
-        agreed_amount: editFormData.agreed_amount ? parseFloat(editFormData.agreed_amount) : null,
-        rate: editFormData.rate ? parseFloat(editFormData.rate) : null,
-        currency: editFormData.currency,
-        expected_delivery_date: editFormData.expected_delivery_date || null,
-        payment_due_date: editFormData.payment_due_date || null,
-      }).eq('id', shipment.id);
+      // The shipment update and its audit timeline entry commit together.
+      const { error: updateError } = await supabase.rpc('update_shipment_details_with_timeline', {
+        p_shipment_id: shipment.id,
+        p_sender_details: editFormData.sender_details,
+        p_receiver_details: editFormData.receiver_details,
+        p_weight: weight,
+        p_dimensions: editFormData.dimensions,
+        p_origin: editFormData.origin,
+        p_destination: editFormData.destination,
+        p_commodity_type: editFormData.commodity_type,
+        p_shipment_type: editFormData.shipment_type,
+        p_service_type: editFormData.service_type,
+        p_agreed_amount: agreedAmount,
+        p_rate: rate,
+        p_currency: editFormData.currency || 'NGN',
+        p_expected_delivery_date: editFormData.expected_delivery_date || null,
+        p_payment_due_date: editFormData.payment_due_date || null,
+      });
       if (updateError) throw updateError;
 
-      const { error: timelineError } = await supabase.from('shipment_timeline').insert([{
-        shipment_id: shipment.id,
-        status_dropdown: 'Details Edited',
-        status_notes: 'Shipment info corrected.',
-        updated_by_role: userRole,
-        action_by_name: actionBy || userRole,
-      }]);
-      if (timelineError) toast.warning('Shipment details saved, but the timeline entry could not be created.');
-
+      toast.success('Shipment details and audit history updated.');
       setIsEditing(false);
       await fetchData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to save shipment changes.');
+      await fetchData();
     } finally {
       setIsSubmitting(false);
     }
