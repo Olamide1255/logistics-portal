@@ -653,12 +653,12 @@ export default function ShipmentDetails() {
       )}
 
       {/* HEADER */}
-      <div className="flex justify-between items-center mb-2">
+      <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/shipments" className="text-slate-400 hover:text-slate-800 transition-colors p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft size={20} /></Link>
           <h1 className="text-sm font-semibold text-slate-500 uppercase tracking-widest hidden md:block">Back to Shipments</h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
           <button type="button" onClick={generatePDF} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-md font-medium text-sm">
             <Download size={16} /> Download Manifest
           </button>
@@ -756,7 +756,7 @@ export default function ShipmentDetails() {
           {/* FINANCIAL LEDGER */}
           {canSeeFinancials && !isEditing && (
             <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
-              <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-4">
+              <div className="mb-4 flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2"><DollarSign size={20} className="text-emerald-500"/> Financial Ledger</h2>
                 {canRecordPayment && (
                   <button type="button" onClick={() => setShowPaymentModal(true)} className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-md">
@@ -765,7 +765,7 @@ export default function ShipmentDetails() {
                 )}
               </div>
               
-              <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <p className="text-xs font-bold text-slate-500 uppercase mb-1">Agreed Amount</p>
                   <p className="text-lg font-extrabold text-slate-900">{shipment.currency} {agreedAmount.toLocaleString()}</p>
@@ -784,7 +784,7 @@ export default function ShipmentDetails() {
               <div className="space-y-2">
                 {payments.length === 0 && <p className="text-sm text-slate-500 italic">No payments recorded yet.</p>}
                 {payments.map(p => (
-                  <div key={p.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <div key={p.id} className="flex flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-sm font-bold text-slate-900">{p.currency} {parseFloat(p.amount).toLocaleString()}</p>
                       <p className="text-xs text-slate-500">{p.payment_method} • Ref: {p.reference || 'N/A'}</p>
