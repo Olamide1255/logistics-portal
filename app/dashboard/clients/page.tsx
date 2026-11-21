@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { exportToCSV } from '@/lib/export';
-import { Users, Edit, Trash2, Save, X, Download, DollarSign } from 'lucide-react';
+import { Users, Edit, Trash2, Save, X, Download } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
 type ClientCurrencyTotals = Record<string, { billed: number; paid: number }>;
