@@ -26,8 +26,10 @@ begin
   where p.id = actor_id;
 
   if actor_company_id is null
+     or actor_role is null
+     or actor_role not in ('Customer Service', 'Finance', 'Freight', 'RFS', 'Operations', 'Super Admin')
      or new.company_id is distinct from actor_company_id then
-    raise exception 'Timeline entry must belong to the authenticated actor company'
+    raise exception 'Timeline entry must belong to an authorized actor in the same company'
       using errcode = '42501';
   end if;
 
