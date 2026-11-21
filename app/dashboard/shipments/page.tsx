@@ -19,6 +19,7 @@ type ShipmentRow = {
   clients: { client_name: string } | null;
 };
 
+// Keep each register response bounded; the server still reports the exact filtered count.
 const PAGE_SIZE = 25;
 const STATUS_OPTIONS = [
   'Registered',
