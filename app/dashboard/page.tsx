@@ -12,43 +12,84 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   const fetchDashboardData = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError || !user) return;
 
-    const { data: profile } = await supabase.from('profiles').select('role, is_platform_admin').eq('id', user.id).single();
-    
-    if (profile?.is_platform_admin) {
-      setIsPlatformAdmin(true);
-      setRole('Platform Admin');
-      setLoading(false);
-      return; // Stop here. Don't fetch shipments for Platform Admins.
-    }
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role, is_platform_admin')
+        .eq('id', user.id)
+        .single();
 
-    let currentRole = profile?.role || 'Unknown';
-    setRole(currentRole);
+      if (profileError || !profile) {
+        console.error('Unable to load dashboard profile:', profileError);
+        return;
+      }
 
-    const { data } = await supabase.from('shipments_secure').select('*, clients(client_name)').order('created_at', { ascending: false });
-    
-    if (data) {
+      if (profile.is_platform_admin) {
+        setIsPlatformAdmin(true);
+        setRole('Platform Admin');
+        return;
+      }
+
+      const currentRole = profile.role || 'Unknown';
+      setRole(currentRole);
+
+      // Exact-count queries run in Postgres under the caller's tenant RLS.
+      // This avoids downloading the entire shipment table and avoids silently
+      // undercounting when the browser client's row limit is reached.
+      const [totalResult, financeResult, freightResult, rfsResult, opsResult] = await Promise.all([
+        supabase.from('shipments_secure').select('id', { count: 'exact', head: true }),
+        supabase.from('shipments_secure').select('id', { count: 'exact', head: true }).eq('payment_status', 'Pending'),
+        supabase.from('shipments_secure').select('id', { count: 'exact', head: true }).eq('payment_status', 'Approved').eq('current_status', 'Registered'),
+        supabase.from('shipments_secure').select('id', { count: 'exact', head: true }).eq('current_status', 'Booked'),
+        supabase.from('shipments_secure').select('id', { count: 'exact', head: true }).in('current_status', ['Picked Up', 'Handed to Ops']),
+      ]);
+
+      const countErrors = [totalResult, financeResult, freightResult, rfsResult, opsResult]
+        .filter((result) => result.error);
+      if (countErrors.length) {
+        throw new Error(countErrors.map((result) => result.error?.message).join('; '));
+      }
+
       setStats({
-        total: data.length,
-        pendingFinance: data.filter(s => s.payment_status === 'Pending').length,
-        pendingFreight: data.filter(s => s.payment_status === 'Approved' && s.current_status === 'Registered').length,
-        pendingRFS: data.filter(s => s.current_status === 'Booked').length,
-        pendingOps: data.filter(s => s.current_status === 'Picked Up' || s.current_status === 'Handed to Ops').length,
+        total: totalResult.count ?? 0,
+        pendingFinance: financeResult.count ?? 0,
+        pendingFreight: freightResult.count ?? 0,
+        pendingRFS: rfsResult.count ?? 0,
+        pendingOps: opsResult.count ?? 0,
       });
 
-      let filteredQueue = [];
-      if (currentRole === 'Finance') filteredQueue = data.filter(s => s.payment_status === 'Pending');
-      else if (currentRole === 'Freight') filteredQueue = data.filter(s => s.payment_status === 'Approved' && s.current_status === 'Registered');
-      else if (currentRole === 'RFS') filteredQueue = data.filter(s => s.current_status === 'Booked');
-      else if (currentRole === 'Operations') filteredQueue = data.filter(s => s.current_status === 'Picked Up' || s.current_status === 'Handed to Ops');
-      else if (currentRole === 'Customer Service') filteredQueue = data.filter(s => s.current_status !== 'Delivered');
-      else filteredQueue = data.filter(s => s.current_status !== 'Delivered');
-      
-      setQueue(filteredQueue);
+      // Fetch only the actionable first page. The full shipment register remains
+      // available from the Shipments screen; the dashboard is an exception queue,
+      // not an unbounded export of the tenant's shipment history.
+      let queueQuery = supabase
+        .from('shipments_secure')
+        .select('id, awb_number, shipment_type, current_status, payment_status, created_at, clients(client_name)')
+        .order('created_at', { ascending: false })
+        .limit(25);
+
+      if (currentRole === 'Finance') {
+        queueQuery = queueQuery.eq('payment_status', 'Pending');
+      } else if (currentRole === 'Freight') {
+        queueQuery = queueQuery.eq('payment_status', 'Approved').eq('current_status', 'Registered');
+      } else if (currentRole === 'RFS') {
+        queueQuery = queueQuery.eq('current_status', 'Booked');
+      } else if (currentRole === 'Operations') {
+        queueQuery = queueQuery.in('current_status', ['Picked Up', 'Handed to Ops']);
+      } else {
+        queueQuery = queueQuery.neq('current_status', 'Delivered');
+      }
+
+      const { data: queueData, error: queueError } = await queueQuery;
+      if (queueError) throw queueError;
+      setQueue(queueData || []);
+    } catch (error) {
+      console.error('Dashboard data could not be loaded:', error);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -128,7 +169,7 @@ export default function Dashboard() {
 
       <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-white">
-          <div><h2 className="text-lg font-bold text-slate-900">My Action Queue</h2><p className="text-sm text-slate-500 mt-1">Shipments currently requiring your attention.</p></div>
+          <div><h2 className="text-lg font-bold text-slate-900">My Action Queue</h2><p className="text-sm text-slate-500 mt-1">Your latest 25 shipments requiring attention. Open Shipments for the full register.</p></div>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-100">
