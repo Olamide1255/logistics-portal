@@ -60,7 +60,7 @@ export default function RegisterShipment() {
     setSuccess('');
 
     try {
-      const { data: existingShipment } = await supabase.from('shipments').select('awb_number').eq('awb_number', formData.awb_number).maybeSingle(); 
+      const { data: existingShipment } = await supabase.from('shipments_secure').select('awb_number').eq('awb_number', formData.awb_number).maybeSingle(); 
       if (existingShipment) throw new Error('A shipment with this AWB Number already exists!');
 
       let clientId;
