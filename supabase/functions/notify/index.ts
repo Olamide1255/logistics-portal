@@ -3,12 +3,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-const LEGACY_WEBHOOK_SECRET = Deno.env.get('LOGIFLOW_WEBHOOK_SECRET')
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID')
 const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY')
 
 async function getVaultWebhookSecret() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error('Webhook secret service configuration is missing.')
+  }
 
   const response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/get_notify_webhook_secret`, {
     method: 'POST',
@@ -20,28 +21,24 @@ async function getVaultWebhookSecret() {
     body: '{}',
   })
 
-  if (!response.ok) return null
+  if (!response.ok) {
+    throw new Error('Webhook secret lookup failed.')
+  }
+
   const secret = await response.json()
-  return typeof secret === 'string' && secret.length >= 32 ? secret : null
+  if (typeof secret !== 'string' || secret.length < 32) {
+    throw new Error('Webhook secret is unavailable.')
+  }
+  return secret
 }
 
 serve(async (req) => {
   try {
+    const expectedSecret = await getVaultWebhookSecret()
     const authHeader = req.headers.get('authorization')
-    let vaultSecret = null
-    try {
-      vaultSecret = await getVaultWebhookSecret()
-    } catch (error) {
-      console.warn('Vault webhook secret lookup temporarily failed.')
-    }
-
-    // Transitional compatibility keeps the current production trigger working
-    // while the database trigger is switched to its Vault-managed secret.
-    const validVaultHeader = vaultSecret && authHeader === `Bearer ${vaultSecret}`
-    const validLegacyHeader = LEGACY_WEBHOOK_SECRET && authHeader === `Bearer ${LEGACY_WEBHOOK_SECRET}`
-    if (!validVaultHeader && !validLegacyHeader) {
+    if (authHeader !== `Bearer ${expectedSecret}`) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: vaultSecret || LEGACY_WEBHOOK_SECRET ? 401 : 503,
+        status: 401,
         headers: { 'Content-Type': 'application/json' },
       })
     }
@@ -50,10 +47,7 @@ serve(async (req) => {
     const record = payload?.record
 
     if (payload?.type !== 'INSERT' || !record) {
-      return new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      })
+      return new Response(JSON.stringify({ ok: true }), { status: 200 })
     }
 
     if (typeof record.company_id !== 'string' || !record.company_id) {
@@ -66,15 +60,13 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Notification delivery unavailable' }), { status: 503 })
     }
 
-    const shipmentUrl = record.shipment_awb
-      ? `https://logistics-portal-ten.vercel.app/dashboard/shipments/${encodeURIComponent(record.shipment_awb)}`
-      : 'https://logistics-portal-ten.vercel.app/dashboard'
-
     const body = {
       app_id: ONESIGNAL_APP_ID,
       headings: { en: record.title },
       contents: { en: record.message },
-      url: shipmentUrl,
+      url: record.shipment_awb
+        ? `https://logistics-portal-ten.vercel.app/dashboard/shipments/${encodeURIComponent(record.shipment_awb)}`
+        : 'https://logistics-portal-ten.vercel.app/dashboard',
       filters: record.role_target === 'ALL'
         ? [{ field: 'tag', key: 'company_id', relation: '=', value: record.company_id }]
         : [
