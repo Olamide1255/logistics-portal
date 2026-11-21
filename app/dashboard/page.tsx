@@ -184,13 +184,20 @@ export default function Dashboard() {
 
   useEffect(() => {
     void fetchDashboardData();
-    const channel = supabase
-      .channel('dashboard-shipments')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shipments' }, () => {
-        void fetchDashboardData(true);
-      })
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+
+    // Shipment rows are intentionally excluded from Realtime publication so
+    // column-restricted financial data cannot leak through change payloads.
+    // Refresh periodically instead, and refresh promptly when the tab returns.
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void fetchDashboardData(true);
+    };
+    const interval = window.setInterval(refreshWhenVisible, 120000);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, [fetchDashboardData]);
 
   const maxDaily = useMemo(
@@ -299,7 +306,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <p className="text-xs leading-5 text-slate-400">Live metrics are tenant-scoped and refresh when shipment records change. SLA and receivables reporting uses expected-delivery and payment-due dates; records without those dates are excluded from the relevant calculations.</p>
+      <p className="text-xs leading-5 text-slate-400">Live metrics are tenant-scoped and refresh automatically every two minutes while this page is open. SLA and receivables reporting uses expected-delivery and payment-due dates; records without those dates are excluded from the relevant calculations.</p>
     </div>
   );
 }
