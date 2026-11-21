@@ -395,7 +395,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
                       }} className={`p-4 border-b cursor-pointer hover:bg-slate-50 ${!n.is_read ? 'bg-indigo-50/50' : ''}`}>
                         <p className={`text-sm ${!n.is_read ? 'font-bold' : ''}`}>{n.title}</p>
                         <p className="text-xs text-slate-500">{n.message}</p>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 </div>
