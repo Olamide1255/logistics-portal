@@ -289,7 +289,7 @@ export default function ShipmentsList() {
                 </td></tr>
               )}
               {!loading && !loadError && shipments.length === 0 && (
-                <tr><td colSpan={8} className="px-6 py-14 text-center">
+                <tr><td colSpan={9} className="px-6 py-14 text-center">
                   <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><Package size={22} /></div>
                   <p className="mt-3 font-semibold text-slate-800">{hasActiveFilters ? 'No matching shipments' : 'No shipments yet'}</p>
                   <p className="mt-1 text-sm text-slate-500">{hasActiveFilters ? 'Try changing or clearing your filters.' : 'New shipment registrations will appear here.'}</p>
