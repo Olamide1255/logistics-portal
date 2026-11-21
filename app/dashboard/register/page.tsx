@@ -126,35 +126,35 @@ export default function RegisterShipment() {
         <p className="text-slate-500 mt-1 font-medium">Enter the shipment details below. AWB numbers must be unique.</p>
       </div>
 
-      {error && <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6 border border-red-200 font-medium">{error}</div>}
-      {success && <div className="bg-emerald-50 text-emerald-600 p-4 rounded-xl mb-6 border border-emerald-200 font-medium">{success}</div>}
+      {error && <div role="alert" aria-live="assertive" className="bg-red-50 text-red-700 p-4 rounded-xl mb-6 border border-red-200 font-medium">{error}</div>}
+      {success && <div role="status" aria-live="polite" className="bg-emerald-50 text-emerald-700 p-4 rounded-xl mb-6 border border-emerald-200 font-medium">{success}</div>}
 
       <form onSubmit={handleRegister} className="bg-white p-6 md:p-8 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div><label className="block text-sm font-bold text-slate-700 mb-1">AWB Number *</label><input required name="awb_number" value={formData.awb_number} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 123-45678901" /></div>
-          <div><label className="block text-sm font-bold text-slate-700 mb-1">Client Name *</label><input required name="client_name" value={formData.client_name} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. Acme Corp" /></div>
+          <div><label htmlFor="shipment-awb" className="block text-sm font-bold text-slate-700 mb-1">AWB Number *</label><input id="shipment-awb" required name="awb_number" value={formData.awb_number} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 123-45678901" /></div>
+          <div><label htmlFor="shipment-client" className="block text-sm font-bold text-slate-700 mb-1">Client Name *</label><input id="shipment-client" required name="client_name" value={formData.client_name} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. Acme Corp" /></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div><label className="block text-sm font-bold text-slate-700 mb-1">Shipment Type *</label><select required name="shipment_type" value={formData.shipment_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"><option value="Export">Export</option><option value="Import">Import</option></select></div>
-          <div><label className="block text-sm font-bold text-slate-700 mb-1">Service Type *</label><select required name="service_type" value={formData.service_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"><option value="DDP">DDP</option><option value="DAP">DAP</option><option value="D2P">D2P</option><option value="FOB">FOB</option><option value="EXW">EXW</option><option value="AFW">AFW</option></select></div>
+          <div><label htmlFor="shipment-type" className="block text-sm font-bold text-slate-700 mb-1">Shipment Type *</label><select id="shipment-type" required name="shipment_type" value={formData.shipment_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"><option value="Export">Export</option><option value="Import">Import</option></select></div>
+          <div><label htmlFor="shipment-service" className="block text-sm font-bold text-slate-700 mb-1">Service Type *</label><select id="shipment-service" required name="service_type" value={formData.service_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"><option value="DDP">DDP</option><option value="DAP">DAP</option><option value="D2P">D2P</option><option value="FOB">FOB</option><option value="EXW">EXW</option><option value="AFW">AFW</option></select></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div><label className="block text-sm font-bold text-slate-700 mb-1">Rate</label><input type="number" step="0.01" name="rate" value={formData.rate} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 5.50" /></div>
-          <div><label className="block text-sm font-bold text-slate-700 mb-1">Agreed Amount</label><input type="number" step="0.01" name="agreed_amount" value={formData.agreed_amount} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 150000" /></div>
-          <div><label className="block text-sm font-bold text-slate-700 mb-1">Currency</label><select name="currency" value={formData.currency} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white font-semibold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"><option value="NGN">NGN</option><option value="USD">USD</option></select></div>
+          <div><label htmlFor="shipment-rate" className="block text-sm font-bold text-slate-700 mb-1">Rate</label><input id="shipment-rate" type="number" min="0" step="0.01" name="rate" value={formData.rate} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 5.50" /></div>
+          <div><label htmlFor="shipment-agreed-amount" className="block text-sm font-bold text-slate-700 mb-1">Agreed Amount</label><input id="shipment-agreed-amount" type="number" min="0" step="0.01" name="agreed_amount" value={formData.agreed_amount} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 150000" /></div>
+          <div><label htmlFor="shipment-currency" className="block text-sm font-bold text-slate-700 mb-1">Currency</label><select id="shipment-currency" name="currency" value={formData.currency} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white font-semibold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"><option value="NGN">NGN</option><option value="USD">USD</option></select></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div><label className="block text-sm font-bold text-slate-700 mb-1">Sender Details *</label><input required name="sender_details" value={formData.sender_details} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="Name, Phone, Address" /></div>
-          <div><label className="block text-sm font-bold text-slate-700 mb-1">Receiver Details *</label><input required name="receiver_details" value={formData.receiver_details} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="Name, Phone, Address" /></div>
+          <div><label htmlFor="shipment-sender" className="block text-sm font-bold text-slate-700 mb-1">Sender Details *</label><input id="shipment-sender" required name="sender_details" value={formData.sender_details} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="Name, Phone, Address" /></div>
+          <div><label htmlFor="shipment-receiver" className="block text-sm font-bold text-slate-700 mb-1">Receiver Details *</label><input id="shipment-receiver" required name="receiver_details" value={formData.receiver_details} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="Name, Phone, Address" /></div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div><label className="block text-sm font-bold text-slate-700 mb-1">Origin *</label><input required name="origin" value={formData.origin} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. Lagos (LOS)" /></div>
-          <div><label className="block text-sm font-bold text-slate-700 mb-1">Destination *</label><input required name="destination" value={formData.destination} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. London (LHR)" /></div>
-          <div><label className="block text-sm font-bold text-slate-700 mb-1">Commodity Type *</label><input required name="commodity_type" value={formData.commodity_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. Electronics" /></div>
+          <div><label htmlFor="shipment-origin" className="block text-sm font-bold text-slate-700 mb-1">Origin *</label><input id="shipment-origin" required name="origin" value={formData.origin} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. Lagos (LOS)" /></div>
+          <div><label htmlFor="shipment-destination" className="block text-sm font-bold text-slate-700 mb-1">Destination *</label><input id="shipment-destination" required name="destination" value={formData.destination} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. London (LHR)" /></div>
+          <div><label htmlFor="shipment-commodity" className="block text-sm font-bold text-slate-700 mb-1">Commodity Type *</label><input id="shipment-commodity" required name="commodity_type" value={formData.commodity_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. Electronics" /></div>
         </div>
 
         <div className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-5">
@@ -164,21 +164,21 @@ export default function RegisterShipment() {
           </div>
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
             <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-700">Expected delivery date</label>
-              <input type="date" name="expected_delivery_date" value={formData.expected_delivery_date} onChange={handleChange} className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20" />
+              <label htmlFor="shipment-expected-delivery" className="mb-1 block text-sm font-semibold text-slate-700">Expected delivery date</label>
+              <input id="shipment-expected-delivery" type="date" name="expected_delivery_date" value={formData.expected_delivery_date} onChange={handleChange} className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20" />
               <p className="mt-1 text-xs text-slate-400">Used to calculate on-time and late deliveries.</p>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-semibold text-slate-700">Payment due date</label>
-              <input type="date" name="payment_due_date" value={formData.payment_due_date} onChange={handleChange} className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20" />
+              <label htmlFor="shipment-payment-due" className="mb-1 block text-sm font-semibold text-slate-700">Payment due date</label>
+              <input id="shipment-payment-due" type="date" name="payment_due_date" value={formData.payment_due_date} onChange={handleChange} className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20" />
               <p className="mt-1 text-xs text-slate-400">Used to calculate outstanding receivables ageing.</p>
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div><label className="block text-sm font-bold text-slate-700 mb-1">Weight (kg) *</label><input required type="number" step="0.01" name="weight" value={formData.weight} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 12.5" /></div>
-          <div><label className="block text-sm font-bold text-slate-700 mb-1">Dimensions (LxWxH cm) *</label><input required name="dimensions" value={formData.dimensions} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 50x40x30" /></div>
+          <div><label htmlFor="shipment-weight" className="block text-sm font-bold text-slate-700 mb-1">Weight (kg) *</label><input id="shipment-weight" required type="number" min="0.01" step="0.01" name="weight" value={formData.weight} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 12.5" /></div>
+          <div><label htmlFor="shipment-dimensions" className="block text-sm font-bold text-slate-700 mb-1">Dimensions (LxWxH cm) *</label><input id="shipment-dimensions" required name="dimensions" value={formData.dimensions} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. 50x40x30" /></div>
         </div>
 
         <button disabled={loading} type="submit" className="w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50 transition-all shadow-md shadow-indigo-600/20">
