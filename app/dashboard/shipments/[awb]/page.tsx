@@ -24,6 +24,7 @@ export default function ShipmentDetails() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [userRole, setUserRole] = useState<string>('');
   const [isOnline, setIsOnline] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -55,55 +56,73 @@ export default function ShipmentDetails() {
 
   const fetchData = async () => {
     setLoading(true);
+    setLoadError(false);
     setIsOnline(navigator.onLine);
-    if (navigator.onLine) processQueue();
+    if (navigator.onLine) void processQueue();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    // Authentication and shipment lookup are independent and can run together.
+    const [authResult, shipmentResult] = await Promise.all([
+      supabase.auth.getUser(),
+      supabase
+        .from('shipments_secure')
+        .select(`*, tracking_token, clients (client_name)`)
+        .ilike('awb_number', awb)
+        .single(),
+    ]);
+
+    const user = authResult.data.user;
     let currentRole = 'Unknown';
     if (user) {
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      if (profileError) console.error('Shipment profile lookup failed:', profileError);
       currentRole = profile?.role || 'Unknown';
       setUserRole(currentRole);
     }
 
-    const { data: shipData, error } = await supabase
-      .from('shipments_secure')
-      .select(`*, tracking_token, clients (client_name)`)
-      .ilike('awb_number', awb)
-      .single();
-    
-    if (error) { console.error(error); setLoading(false); return; }
-
-    let safeShipment = shipData;
-    const financialRoles = ['Super Admin', 'Customer Service', 'Finance', 'Freight', 'Platform Admin'];
-    if (shipData?.id && financialRoles.includes(currentRole)) {
-      const { data: financials, error: financialError } = await supabase.rpc('get_shipment_financials', {
-        p_shipment_id: shipData.id,
-      });
-      if (financialError) {
-        console.error('Shipment financial details could not be loaded:', financialError);
-      } else if (financials && typeof financials === 'object') {
-        safeShipment = { ...shipData, ...financials };
-      }
+    const { data: shipData, error: shipmentError } = shipmentResult;
+    if (shipmentError || !shipData) {
+      console.error('Shipment lookup failed:', shipmentError);
+      setLoadError(true);
+      setLoading(false);
+      return;
     }
+
+    const financialRoles = ['Super Admin', 'Customer Service', 'Finance', 'Freight', 'Platform Admin'];
+    const canViewFinancials = financialRoles.includes(currentRole);
+
+    // All shipment sub-panels load concurrently. A slow document or ledger
+    // query no longer blocks the timeline, comments and shipment header.
+    const [financialResult, timelineResult, commentsResult, documentsResult, paymentsResult] = await Promise.all([
+      canViewFinancials
+        ? supabase.rpc('get_shipment_financials', { p_shipment_id: shipData.id })
+        : Promise.resolve({ data: null, error: null }),
+      supabase.from('shipment_timeline').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false }),
+      supabase.from('shipment_comments').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: true }),
+      supabase.from('shipment_documents').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false }),
+      supabase.from('payments').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false }),
+    ]);
+
+    if (financialResult.error) console.error('Shipment financial details could not be loaded:', financialResult.error);
+    if (timelineResult.error) console.error('Shipment timeline could not be loaded:', timelineResult.error);
+    if (commentsResult.error) console.error('Shipment comments could not be loaded:', commentsResult.error);
+    if (documentsResult.error) console.error('Shipment documents could not be loaded:', documentsResult.error);
+    if (paymentsResult.error) console.error('Shipment payment ledger could not be loaded:', paymentsResult.error);
+
+    const safeShipment = financialResult.data && typeof financialResult.data === 'object'
+      ? { ...shipData, ...financialResult.data }
+      : shipData;
 
     setShipment(safeShipment);
     setEditFormData(safeShipment);
     setTrackingToken(safeShipment.tracking_token || '');
-
-    if (shipData) {
-      const { data: timeData } = await supabase.from('shipment_timeline').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false });
-      setTimeline(timeData || []);
-
-      const { data: commData } = await supabase.from('shipment_comments').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: true });
-      setComments(commData || []);
-
-      const { data: docData } = await supabase.from('shipment_documents').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false });
-      setDocuments(docData || []);
-
-      const { data: payData } = await supabase.from('payments').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false });
-      setPayments(payData || []);
-    }
+    setTimeline(timelineResult.data || []);
+    setComments(commentsResult.data || []);
+    setDocuments(documentsResult.data || []);
+    setPayments(paymentsResult.data || []);
     setLoading(false);
   };
 
@@ -599,8 +618,18 @@ export default function ShipmentDetails() {
     }
   };
 
-  if (loading) return <div className="p-10 text-center text-slate-500 animate-pulse">Loading...</div>;
-  if (!shipment) return <div className="p-10 text-center text-red-500 font-bold">Shipment not found.</div>;
+  if (loading) return <div className="mx-auto max-w-5xl p-10 text-center text-sm font-medium text-slate-500" role="status">Loading shipment workspace…</div>;
+  if (loadError) return (
+    <div className="mx-auto max-w-xl rounded-2xl border border-rose-200 bg-white p-8 text-center shadow-sm">
+      <p className="font-semibold text-slate-900">We couldn&apos;t load this shipment.</p>
+      <p className="mt-2 text-sm text-slate-500">It may not exist, or the connection may have been interrupted. Your records have not been changed.</p>
+      <div className="mt-5 flex justify-center gap-3">
+        <button onClick={() => router.push('/dashboard/shipments')} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Back to shipments</button>
+        <button onClick={() => void fetchData()} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Try again</button>
+      </div>
+    </div>
+  );
+  if (!shipment) return <div className="p-10 text-center text-slate-500">Shipment details are unavailable.</div>;
 
   const canEditOrDelete = userRole === 'Super Admin' || userRole === 'Customer Service';
   const canSeeFinancials = userRole === 'Super Admin' || userRole === 'Customer Service' || userRole === 'Finance' || userRole === 'Freight';
