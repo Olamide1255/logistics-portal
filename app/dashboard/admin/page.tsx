@@ -10,6 +10,7 @@ export default function AdminUsers() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentCompanyId, setCurrentCompanyId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
@@ -24,6 +25,7 @@ export default function AdminUsers() {
       if (profileError) { setLoadError(true); setLoading(false); return; }
       if (myProfile?.role === 'Super Admin' && !myProfile.is_platform_admin) {
         setIsSuperAdmin(true);
+        setCurrentCompanyId(myProfile.company_id);
 
         // Fetch all users
         const { data, error } = await supabase.from('profiles').select('id, email, role, is_platform_admin').eq('company_id', myProfile.company_id).order('email', { ascending: true });
@@ -37,7 +39,7 @@ export default function AdminUsers() {
 
   const handleRoleChange = async (userId: string, newRole: string) => {
     setUpdatingId(userId);
-    const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
+    const { error } = await supabase.from('profiles').update({ role: newRole }).eq('id', userId).eq('company_id', currentCompanyId || '');
     
     if (error) {
       toast.error("Failed to update role: " + error.message);
