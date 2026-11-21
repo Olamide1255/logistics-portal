@@ -131,8 +131,8 @@ export default function Dashboard() {
         supabase.from('shipments_secure').select('id', { count: 'exact', head: true }).eq('current_status', 'Booked'),
         supabase.from('shipments_secure').select('id', { count: 'exact', head: true }).in('current_status', ['Picked Up', 'Handed to Ops']),
         supabase.rpc('get_operational_overview', {
-          p_start_date: new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10),
-          p_end_date: new Date().toISOString().slice(0, 10),
+          p_start_date: localDate(new Date(Date.now() - 29 * 86400000)),
+          p_end_date: localDate(new Date()),
         }),
       ]);
 
