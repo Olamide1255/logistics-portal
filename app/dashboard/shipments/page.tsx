@@ -34,12 +34,21 @@ const STATUS_OPTIONS = [
 
 function deliveryDateLabel(date: string | null, status: string | null) {
   if (!date) return { label: 'Not set', overdue: false };
-  const due = new Date(`${date}T00:00:00`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayLagos = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Lagos',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  const due = new Date(`${date}T00:00:00Z`);
   return {
-    label: due.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-    overdue: status !== 'Delivered' && due < today,
+    label: due.toLocaleDateString('en-GB', {
+      timeZone: 'Africa/Lagos',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }),
+    overdue: status !== 'Delivered' && date < todayLagos,
   };
 }
 
