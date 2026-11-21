@@ -178,7 +178,10 @@ export async function POST(req: Request) {
       try { await updateInviteState(admin, targetCompanyId, 'failed', email, message); }
       catch (stateError) { console.error('Unable to persist invitation failure state:', stateError); }
     }
-    console.error('Invite API error:', error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error('Invite API error:', message);
+    return NextResponse.json(
+      { error: 'The invitation could not be completed. Please retry or contact platform support.' },
+      { status: 500 },
+    );
   }
 }
