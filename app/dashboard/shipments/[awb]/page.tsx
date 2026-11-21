@@ -29,6 +29,7 @@ export default function ShipmentDetails() {
   const [isOnline, setIsOnline] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [trackingToken, setTrackingToken] = useState<string>('');
+  const [companyName, setCompanyName] = useState('LogiFlow');
 
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
@@ -96,7 +97,7 @@ export default function ShipmentDetails() {
 
     // All shipment sub-panels load concurrently. A slow document or ledger
     // query no longer blocks the timeline, comments and shipment header.
-    const [financialResult, timelineResult, commentsResult, documentsResult, paymentsResult] = await Promise.all([
+    const [financialResult, timelineResult, commentsResult, documentsResult, paymentsResult, companyResult] = await Promise.all([
       canViewFinancials
         ? supabase.rpc('get_shipment_financials', { p_shipment_id: shipData.id })
         : Promise.resolve({ data: null, error: null }),
@@ -104,6 +105,9 @@ export default function ShipmentDetails() {
       supabase.from('shipment_comments').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: true }),
       supabase.from('shipment_documents').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false }),
       supabase.from('payments').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false }),
+      shipData.company_id
+        ? supabase.from('companies').select('name').eq('id', shipData.company_id).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
     ]);
 
     if (financialResult.error) console.error('Shipment financial details could not be loaded:', financialResult.error);
@@ -111,6 +115,7 @@ export default function ShipmentDetails() {
     if (commentsResult.error) console.error('Shipment comments could not be loaded:', commentsResult.error);
     if (documentsResult.error) console.error('Shipment documents could not be loaded:', documentsResult.error);
     if (paymentsResult.error) console.error('Shipment payment ledger could not be loaded:', paymentsResult.error);
+    if (companyResult.error) console.error('Tenant branding could not be loaded:', companyResult.error);
 
     const safeShipment = financialResult.data && typeof financialResult.data === 'object'
       ? { ...shipData, ...financialResult.data }
@@ -119,6 +124,7 @@ export default function ShipmentDetails() {
     setShipment(safeShipment);
     setEditFormData(safeShipment);
     setTrackingToken(safeShipment.tracking_token || '');
+    setCompanyName(companyResult.data?.name?.trim() || 'LogiFlow');
     setTimeline(timelineResult.data || []);
     setComments(commentsResult.data || []);
     setDocuments(documentsResult.data || []);
@@ -353,7 +359,7 @@ export default function ShipmentDetails() {
     const doc = new jsPDF();
     doc.setFontSize(20);
     doc.setTextColor(79, 70, 229); 
-    doc.text("MARCHLOG LOGISTICS", 14, 22);
+    doc.text(companyName.toUpperCase(), 14, 22);
     doc.setFontSize(10);
     doc.setTextColor(100);
     doc.text("Official Shipment Manifest", 14, 28);
