@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import {
   Activity, AlertTriangle, ArrowRight, BarChart3, CalendarDays, CheckCircle2, Clock3,
-  Loader2, Package, Plane, RefreshCw, ShieldCheck, Truck, Users,
+  Loader2, Package, Plane, RefreshCw, ShieldCheck, Truck,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -293,7 +293,7 @@ export default function Dashboard() {
               <th className="px-5 py-3 text-right text-[11px] font-bold uppercase tracking-wide text-slate-500">Action</th>
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {!queue.length && <tr><td colSpan={5} className="px-5 py-14 text-center"><CheckCircle2 size={30} className="mx-auto text-emerald-500" /><p className="mt-3 font-semibold text-slate-700">You're all caught up</p><p className="mt-1 text-sm text-slate-400">No shipments currently require attention in this queue.</p></td></tr>}
+              {!queue.length && <tr><td colSpan={5} className="px-5 py-14 text-center"><CheckCircle2 size={30} className="mx-auto text-emerald-500" /><p className="mt-3 font-semibold text-slate-700">You&apos;re all caught up</p><p className="mt-1 text-sm text-slate-400">No shipments currently require attention in this queue.</p></td></tr>}
               {queue.map((item) => <tr key={item.id} className="transition-colors hover:bg-slate-50/70">
                 <td className="px-5 py-4"><Link href={`/dashboard/shipments/${encodeURIComponent(item.awb_number.trim())}`} className="font-semibold text-indigo-600 hover:text-indigo-800">{item.awb_number}</Link><p className="mt-1 max-w-56 truncate text-xs text-slate-500">{item.clients?.client_name || 'Unassigned client'}</p></td>
                 <td className="px-5 py-4 text-sm text-slate-600">{item.shipment_type || '—'}</td>
