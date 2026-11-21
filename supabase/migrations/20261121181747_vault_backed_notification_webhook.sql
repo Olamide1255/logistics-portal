@@ -13,13 +13,17 @@ BEGIN
     RAISE EXCEPTION 'Service role authentication is required'
       USING ERRCODE = '42501';
   END IF;
-  SELECT decrypted_secret INTO v_secret
+
+  SELECT decrypted_secret
+    INTO v_secret
   FROM vault.decrypted_secrets
   WHERE name = 'logiflow_webhook_secret';
+
   IF v_secret IS NULL OR length(v_secret) < 32 THEN
     RAISE EXCEPTION 'Notification webhook secret is not configured'
       USING ERRCODE = '55000';
   END IF;
+
   RETURN v_secret;
 END;
 $function$;
@@ -41,6 +45,7 @@ BEGIN
   SELECT decrypted_secret INTO v_secret
   FROM vault.decrypted_secrets
   WHERE name = 'logiflow_webhook_secret';
+
   SELECT decrypted_secret INTO v_url
   FROM vault.decrypted_secrets
   WHERE name = 'notify_function_url';
@@ -69,6 +74,7 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'Notification push dispatch failed: %', SQLERRM;
   END;
+
   RETURN NEW;
 END;
 $function$;
