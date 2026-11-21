@@ -237,7 +237,24 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       setIsLoggingOut(false);
     }
   };
-  const markAsRead = async (id: string) => { await supabase.from('notifications').update({ is_read: true }).eq('id', id); setNotifications(notifications.map(n => n.id === id ? { ...n, is_read: true } : n)); };
+  const markAsRead = async (id: string) => {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Notification acknowledgement failed:', error);
+      toast.error('Unable to mark this notification as read. Please try again.');
+      return;
+    }
+
+    setNotifications((current) =>
+      current.map((notification) =>
+        notification.id === id ? { ...notification, is_read: true } : notification
+      )
+    );
+  };
   
   const requestPushPermission = async () => {
     if (typeof window !== 'undefined') {
