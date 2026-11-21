@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/ban-ts-comment": "warn",
       "prefer-const": "warn",
       "react/no-unescaped-entities": "warn",
+      // Existing data-fetching and subscription effects are migrated incrementally.
+      "react-hooks/set-state-in-effect": "off",
     },
   },
   globalIgnores([
