@@ -12,7 +12,7 @@ This project is isolated from production. It contains no production tenant data,
 
 ## Schema and fixtures
 
-The staging-only baseline is in `supabase-staging/migrations/20261120135146_staging_schema_baseline.sql`. The follow-up `20261120135246_optimize_profile_rls_initplan.sql` is maintained in both migration paths so the same profile-policy optimization reaches production and staging. The six existing production migrations remain in their original active `supabase/migrations/` path; the staging snapshot is deliberately outside it so production's migration history is not rewritten.
+The staging-only baseline is in `supabase-staging/migrations/20261120135146_staging_schema_baseline.sql`. Follow-up staging migrations mirror the relevant production schema and security changes. The staging baseline is deliberately kept outside the active production migration path so production's migration history is not rewritten; new SQL changes must be mirrored between the two migration directories and checked by CI.
 
 Synthetic fixtures are in `supabase-staging/seed.sql` and can be reloaded with the staging CLI seed workflow. They are not part of the production Supabase configuration. Two tenants are created:
 
