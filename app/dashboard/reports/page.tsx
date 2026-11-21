@@ -284,7 +284,7 @@ export default function OperationsReportsPage() {
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
               <div className="mb-5"><h2 className="font-bold text-slate-900">Monthly shipment volume</h2><p className="mt-1 text-xs text-slate-500">Shipments created each month within the selected period.</p></div>
               {report.monthly_volume.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">No shipment activity in this period.</p> : <div className="space-y-4">{report.monthly_volume.map((item) => {
-                const label = new Date(`${item.period}T00:00:00`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+                const label = new Date(`${item.period}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos', month: 'short', year: 'numeric' });
                 const percent = (item.count / maxMonthly) * 100;
                 return <div key={item.period}><div className="mb-1.5 flex items-center justify-between text-sm"><span className="font-medium text-slate-600">{label}</span><span className="font-semibold tabular-nums text-slate-900">{item.count}</span></div><div className="h-3 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-indigo-500" style={{ width: `${percent}%` }} /></div></div>;
               })}</div>}
