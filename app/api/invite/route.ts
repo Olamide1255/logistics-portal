@@ -101,11 +101,17 @@ export async function POST(req: Request) {
 
     const { data: company, error: companyError } = await admin
       .from('companies')
-      .select('id, admin_invite_email, admin_invite_status')
+      .select('id, status, admin_invite_email, admin_invite_status')
       .eq('id', targetCompanyId)
       .maybeSingle();
 
     if (companyError || !company) return NextResponse.json({ error: 'The selected company does not exist.' }, { status: 404 });
+    if (company.status !== 'Active') {
+      return NextResponse.json(
+        { error: 'Invitations are disabled for suspended or inactive companies. Reactivate the company before inviting users.' },
+        { status: 409 },
+      );
+    }
 
     const [userLimit, ipLimit] = await Promise.all([
       rateLimit('invite:user:' + caller.id, 10, 60 * 60 * 1000),
