@@ -73,7 +73,7 @@ export default function ShipmentDetails() {
 
     const { data: shipData, error } = await supabase
       .from('shipments_secure')
-      .select(`*, clients (client_name)`)
+      .select(`*, tracking_token, clients (client_name)`)
       .ilike('awb_number', awb)
       .single();
     
@@ -81,6 +81,7 @@ export default function ShipmentDetails() {
 
     setShipment(shipData);
     setEditFormData(shipData);
+    setTrackingToken(shipData.tracking_token || '');
 
     if (shipData) {
       const { data: timeData } = await supabase.from('shipment_timeline').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false });
