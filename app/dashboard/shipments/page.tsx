@@ -16,6 +16,7 @@ type ShipmentRow = {
   current_status: string | null;
   payment_status: string | null;
   created_at: string;
+  expected_delivery_date: string | null;
   clients: { client_name: string } | null;
 };
 
@@ -30,6 +31,17 @@ const STATUS_OPTIONS = [
   'Handed to Airline',
   'Delivered',
 ];
+
+function deliveryDateLabel(date: string | null, status: string | null) {
+  if (!date) return { label: 'Not set', overdue: false };
+  const due = new Date(`${date}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return {
+    label: due.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+    overdue: status !== 'Delivered' && due < today,
+  };
+}
 
 function statusClasses(status: string | null) {
   switch (status) {
@@ -99,7 +111,7 @@ export default function ShipmentsList() {
 
     let query = supabase
       .from('shipments_secure')
-      .select('id, awb_number, shipment_type, destination, current_status, payment_status, created_at, clients!inner(client_name)', { count: 'exact' })
+      .select('id, awb_number, shipment_type, destination, current_status, payment_status, created_at, expected_delivery_date, clients!inner(client_name)', { count: 'exact' })
       .order('created_at', { ascending: false });
 
     const safeSearch = search.replace(/[(),%]/g, '').trim();
@@ -254,13 +266,14 @@ export default function ShipmentsList() {
                 <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">Destination</th>
                 <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">Payment</th>
                 <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">Current status</th>
+                <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">Expected delivery</th>
                 <th className="px-5 py-3.5 text-left text-[11px] font-bold uppercase tracking-wider text-slate-500">Registered</th>
                 <th className="px-5 py-3.5 text-right text-[11px] font-bold uppercase tracking-wider text-slate-500"> </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {!loading && loadError && (
-                <tr><td colSpan={8} className="px-6 py-12 text-center">
+                <tr><td colSpan={9} className="px-6 py-12 text-center">
                   <p className="font-semibold text-slate-800">We couldn't load the shipment register.</p>
                   <p className="mt-1 text-sm text-slate-500">Check your connection and try again.</p>
                   <button onClick={() => void fetchShipments(0, searchTerm, statusFilter, paymentFilter, typeFilter)} className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700">Retry</button>
@@ -296,6 +309,12 @@ export default function ShipmentsList() {
                       <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
                       {shipment.current_status || 'Unknown'}
                     </span>
+                  </td>
+                  <td className="whitespace-nowrap px-5 py-4">
+                    {(() => {
+                      const delivery = deliveryDateLabel(shipment.expected_delivery_date, shipment.current_status);
+                      return <span className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${delivery.overdue ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{delivery.overdue ? 'Overdue · ' : ''}{delivery.label}</span>;
+                    })()}
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-xs text-slate-500">
                     <span className="inline-flex items-center gap-1.5"><CalendarDays size={13} />{new Date(shipment.created_at).toLocaleDateString()}</span>
