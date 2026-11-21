@@ -326,7 +326,7 @@ export default function ShipmentsList() {
                     })()}
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-xs text-slate-500">
-                    <span className="inline-flex items-center gap-1.5"><CalendarDays size={13} />{new Date(shipment.created_at).toLocaleDateString()}</span>
+                    <span className="inline-flex items-center gap-1.5"><CalendarDays size={13} />{new Date(shipment.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' })}</span>
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-right">
                     <Link href={`/dashboard/shipments/${encodeURIComponent(shipment.awb_number.trim())}`} className="text-sm font-semibold text-slate-500 transition hover:text-indigo-600">View</Link>
