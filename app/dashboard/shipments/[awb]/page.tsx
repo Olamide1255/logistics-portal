@@ -150,7 +150,10 @@ export default function ShipmentDetails() {
         }
       }
 
-      toast.success("Payment recorded successfully!");\n      if (agreedAmount <= 0) {\n        toast.info('No agreed shipment amount is set. Payment approval remains a separate finance action.');\n      }
+      toast.success("Payment recorded successfully!");
+      if (agreedAmount <= 0) {
+        toast.info('No agreed shipment amount is set. Payment approval remains a separate finance action.');
+      }
       setShowPaymentModal(false);
       setPaymentAmount('');
       setPaymentRef('');
