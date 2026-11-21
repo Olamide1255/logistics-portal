@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { exportToCSV } from '@/lib/export';
 import {
@@ -56,6 +56,7 @@ export default function ClientReports() {
   const [totalCount, setTotalCount] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const requestSequence = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -91,6 +92,7 @@ export default function ClientReports() {
   }, [searchInput]);
 
   const fetchClients = useCallback(async () => {
+    const requestId = ++requestSequence.current;
     setLoading(true);
     const { data, error } = await supabase.rpc('get_client_report_page', {
       p_search: search || null,
@@ -98,6 +100,7 @@ export default function ClientReports() {
       p_offset: page * PAGE_SIZE,
     });
 
+    if (requestId !== requestSequence.current) return;
     if (error) {
       console.error('Client report query failed:', error);
       toast.error('Unable to load client reports. Please try again.');
