@@ -474,8 +474,18 @@ export default function ShipmentDetails() {
       setComments(prev => prev.map(c => c.id === tempId ? data : c));
     } catch (error) {
       setComments(prev => prev.filter(c => c.id !== tempId));
-      queueAction('shipment_comments', 'INSERT', { shipment_id: shipment.id, comment_text: savedComment, updated_by_role: userRole, action_by_name: savedCommentBy });
-      toast.warning("Offline: Comment saved locally.");
+      try {
+        await queueAction('shipment_comments', 'INSERT', {
+          shipment_id: shipment.id,
+          comment_text: savedComment,
+          updated_by_role: userRole,
+          action_by_name: savedCommentBy,
+        });
+        toast.warning('Comment saved on this device and will sync when this account reconnects.');
+      } catch (queueError) {
+        setComments(prev => prev.filter(c => c.id !== tempId));
+        toast.error(queueError instanceof Error ? queueError.message : 'Could not save the comment offline.');
+      }
     }
   };
 
