@@ -10,6 +10,7 @@ SECURITY INVOKER
 SET search_path TO 'pg_catalog', 'public', 'private'
 AS $function$
 DECLARE
+  v_locked_shipment_id uuid;
   v_company_id uuid;
   v_currency text;
   v_payment_status text;
@@ -47,6 +48,19 @@ BEGIN
   IF p_reference IS NOT NULL AND length(p_reference) > 255 THEN
     RAISE EXCEPTION 'Payment reference cannot exceed 255 characters'
       USING ERRCODE = '22001';
+  END IF;
+
+  -- Serialize payment calculations per shipment so simultaneous Finance
+  -- entries cannot both spend the same outstanding balance.
+  SELECT s.id
+    INTO v_locked_shipment_id
+  FROM public.shipments s
+  WHERE s.id = p_shipment_id
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Shipment not found or unavailable to this company'
+      USING ERRCODE = '42501';
   END IF;
 
   SELECT s.company_id, upper(coalesce(nullif(btrim(s.currency), ''), 'NGN')), s.payment_status
