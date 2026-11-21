@@ -22,6 +22,7 @@ export default function EmployeeManagement() {
   const [isInviting, setIsInviting] = useState(false);
 
   const fetchEmployees = useCallback(async (targetPage = page) => {
+    setLoading(true);
     setLoadError(false);
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError) { setLoadError(true); setLoading(false); return; }
@@ -55,7 +56,7 @@ export default function EmployeeManagement() {
     setCompanyId(profile.company_id);
 
     // Load employees for the authenticated company.
-    const { data: emps, error: empsError } = await supabase
+    const { data: emps, error: empsError, count } = await supabase
       .from('profiles')
       .select('id, email, role, department, is_platform_admin', { count: 'exact' })
       .eq('company_id', profile.company_id)
