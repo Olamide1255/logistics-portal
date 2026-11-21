@@ -4,6 +4,8 @@ import { supabase } from '@/lib/supabase';
 import { Users, ShieldAlert, Plus, X, Loader2 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
+const PAGE_SIZE = 50;
+
 export default function EmployeeManagement() {
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
