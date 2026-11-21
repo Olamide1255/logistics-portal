@@ -75,7 +75,7 @@ function TrackingContent() {
                 <p className="mt-2 text-sm text-slate-500">Live progress shared by {shipment.company.name}.</p>
               </div>
               <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
-                {shipment.company.logo_url ? <img src={shipment.company.logo_url} alt="" className="h-9 w-9 rounded-lg object-contain" /> : <span className="grid h-9 w-9 place-items-center rounded-lg bg-indigo-50 text-indigo-600"><Globe2 size={18} /></span>}
+                {shipment.company.logo_url ? <img src={`/api/track/${encodeURIComponent(token)}/logo`} alt="" onError={(event) => { event.currentTarget.src = '/icon-192.png'; }} className="h-9 w-9 rounded-lg object-contain" /> : <span className="grid h-9 w-9 place-items-center rounded-lg bg-indigo-50 text-indigo-600"><Globe2 size={18} /></span>}
                 <div><p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Your logistics partner</p><p className="text-sm font-bold">{shipment.company.name}</p></div>
               </div>
             </div>
