@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -21,7 +21,7 @@ const dateTime = (value?: string | null) => value
   ? new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
   : 'Pending update';
 
-export default function PublicTrackingPage() {
+function TrackingContent() {
   const params = useParams<{ token: string }>();
   const token = params.token;
   const [shipment, setShipment] = useState<TrackingData | null>(null);
@@ -114,5 +114,18 @@ export default function PublicTrackingPage() {
         )}
       </section>
     </main>
+  );
+}
+
+export default function PublicTrackingPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-slate-50 px-5 py-20 text-center">
+        <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+        <p className="text-sm font-medium text-slate-500">Loading secure tracking…</p>
+      </main>
+    }>
+      <TrackingContent />
+    </Suspense>
   );
 }
