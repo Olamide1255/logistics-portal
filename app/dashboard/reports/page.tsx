@@ -195,11 +195,11 @@ export default function OperationsReportsPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <label className="block">
               <span className="mb-1.5 block text-xs font-semibold text-slate-500">From</span>
-              <input type="date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 sm:w-44" />
+              <input type="date" aria-label="Report start date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 sm:w-44" />
             </label>
             <label className="block">
               <span className="mb-1.5 block text-xs font-semibold text-slate-500">To</span>
-              <input type="date" value={endDate} min={startDate || undefined} max={localDate(today)} onChange={(event) => setEndDate(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 sm:w-44" />
+              <input type="date" aria-label="Report end date" value={endDate} min={startDate || undefined} max={localDate(today)} onChange={(event) => setEndDate(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 sm:w-44" />
             </label>
             <button onClick={handleApply} disabled={loading} className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50">Update report</button>
           </div>
