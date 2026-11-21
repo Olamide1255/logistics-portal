@@ -81,6 +81,8 @@ export default function RegisterShipment() {
           sender_details: formData.sender_details, receiver_details: formData.receiver_details,
           weight: parseFloat(formData.weight), dimensions: formData.dimensions, origin: formData.origin,
           destination: formData.destination, commodity_type: formData.commodity_type,
+          expected_delivery_date: formData.expected_delivery_date || null,
+          payment_due_date: formData.payment_due_date || null,
           current_status: 'Registered', payment_status: 'Pending',
         }
       ]);
