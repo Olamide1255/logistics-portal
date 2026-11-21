@@ -227,7 +227,7 @@ export default function Dashboard() {
 
       {loadError && <div className="flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-rose-900">Some dashboard data could not be loaded.</p><p className="mt-1 text-sm text-rose-700">Retry to refresh your shipment metrics and action queue.</p></div><button onClick={() => void fetchDashboardData()} className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-rose-700 shadow-sm ring-1 ring-rose-200">Try again</button></div>}
 
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Total shipments" value={overview?.summary.total_shipments ?? stats.total} detail="Across your company workspace" icon={Package} tint="bg-indigo-50 text-indigo-600" />
         <StatCard label="New this period" value={overview?.summary.created_in_period ?? 0} detail="Registered in the last 30 days" icon={CalendarDays} tint="bg-sky-50 text-sky-600" />
         <StatCard label="Active shipments" value={overview?.summary.active_shipments ?? 0} detail="Not currently marked delivered" icon={Truck} tint="bg-amber-50 text-amber-600" />
