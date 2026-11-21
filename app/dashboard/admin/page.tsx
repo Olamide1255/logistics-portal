@@ -74,7 +74,7 @@ export default function AdminUsers() {
       </div>
 
       {loadError && <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">User records could not be loaded. <button type="button" onClick={() => { setLoading(true); void (async () => { const { data: { user } } = await supabase.auth.getUser(); if (!user) { setLoading(false); return; } const { data: me } = await supabase.from('profiles').select('role, company_id, is_platform_admin').eq('id', user.id).single(); if (me?.role === 'Super Admin' && !me.is_platform_admin) { const { data, error } = await supabase.from('profiles').select('id, email, role, is_platform_admin').eq('company_id', me.company_id).order('email'); if (!error) { setProfiles(data || []); setLoadError(false); } } setLoading(false); })(); }} className="ml-2 font-bold underline">Retry</button></div>}
-      <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60"><div className="overflow-x-auto">
+      <div className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/60">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-slate-50/50">
