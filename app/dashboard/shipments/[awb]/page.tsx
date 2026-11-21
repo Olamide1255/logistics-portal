@@ -745,9 +745,9 @@ export default function ShipmentDetails() {
                   <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Destination</span> <span className="text-slate-900 font-semibold">{shipment.destination}</span></div>
                   <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Commodity</span> <span className="text-slate-900 font-semibold">{shipment.commodity_type}</span></div>
                   <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Weight / Dims</span> <span className="text-slate-900 font-semibold">{shipment.weight} kg / {shipment.dimensions}</span></div>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Expected Delivery</span> <span className="text-slate-900 font-semibold">{shipment.expected_delivery_date ? new Date(`${shipment.expected_delivery_date}T00:00:00`).toLocaleDateString('en-GB') : 'Not set'}</span></div>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Payment Due</span> <span className="text-slate-900 font-semibold">{shipment.payment_due_date ? new Date(`${shipment.payment_due_date}T00:00:00`).toLocaleDateString('en-GB') : 'Not set'}</span></div>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Delivered At</span> <span className="text-slate-900 font-semibold">{shipment.delivered_at ? new Date(shipment.delivered_at).toLocaleString('en-GB') : 'Not recorded'}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Expected Delivery</span> <span className="text-slate-900 font-semibold">{shipment.expected_delivery_date ? new Date(`${shipment.expected_delivery_date}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' }) : 'Not set'}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Payment Due</span> <span className="text-slate-900 font-semibold">{shipment.payment_due_date ? new Date(`${shipment.payment_due_date}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' }) : 'Not set'}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Delivered At</span> <span className="text-slate-900 font-semibold">{shipment.delivered_at ? new Date(shipment.delivered_at).toLocaleString('en-GB', { timeZone: 'Africa/Lagos' }) : 'Not recorded'}</span></div>
                   
                   {canSeeFinancials && (
                     <div className="md:col-span-2 grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mt-2">
@@ -797,7 +797,7 @@ export default function ShipmentDetails() {
                       <p className="text-xs text-slate-500">{p.payment_method} • Ref: {p.reference || 'N/A'}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs font-bold text-slate-600">{new Date(p.created_at).toLocaleDateString()}</p>
+                      <p className="text-xs font-bold text-slate-600">{new Date(p.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' })}</p>
                       <p className="text-xs text-slate-400">By: {p.recorded_by}</p>
                     </div>
                   </div>
@@ -917,7 +917,7 @@ export default function ShipmentDetails() {
                         <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><FileText size={20} /></div>
                         <div>
                           <p className="text-sm font-bold text-slate-800 group-hover:text-indigo-700">{doc.file_name}</p>
-                          <p className="text-xs text-slate-500">Uploaded by {doc.uploaded_by} on {new Date(doc.created_at).toLocaleDateString()}</p>
+                          <p className="text-xs text-slate-500">Uploaded by {doc.uploaded_by} on {new Date(doc.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' })}</p>
                         </div>
                       </div>
                       <span className="text-xs font-semibold text-indigo-600">Open</span>
@@ -937,7 +937,7 @@ export default function ShipmentDetails() {
                 <div key={item.id || i} className={`relative flex items-center justify-between md:justify-normal group is-active ${item.isOptimistic ? 'opacity-60' : ''}`}>
                   <div className={`flex items-center justify-center w-8 h-8 rounded-full border-4 border-white text-white shadow shrink-0 z-10 text-xs ${item.isOptimistic ? 'bg-slate-400' : 'bg-indigo-500'}`}>{item.isOptimistic ? '...' : '✓'}</div>
                   <div className="w-[calc(100%-3rem)] bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm ml-4">
-                    <div className="flex items-center justify-between space-x-2 mb-1"><div className="font-bold text-slate-900 text-sm">{item.status_dropdown}</div><time className="text-[10px] font-semibold text-slate-400 uppercase">{new Date(item.created_at).toLocaleDateString()}</time></div>
+                    <div className="flex items-center justify-between space-x-2 mb-1"><div className="font-bold text-slate-900 text-sm">{item.status_dropdown}</div><time className="text-[10px] font-semibold text-slate-400 uppercase">{new Date(item.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' })}</time></div>
                     <div className="text-sm text-slate-600 leading-relaxed">{item.status_notes}</div>
                     <div className="text-xs text-indigo-600 mt-2 font-bold bg-indigo-50 px-2 py-1 rounded-md inline-block">By: {item.action_by_name}</div>
                   </div>
@@ -951,7 +951,7 @@ export default function ShipmentDetails() {
             <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
               {comments.map((c, i) => (
                 <div key={c.id || i} className={`bg-slate-50 p-4 rounded-xl border border-slate-100 ${c.isOptimistic ? 'opacity-60' : ''}`}>
-                  <div className="flex justify-between items-center mb-2"><span className="font-bold text-slate-800 text-sm">{c.action_by_name}</span><span className="text-[10px] font-bold text-slate-400 uppercase">{c.isOptimistic ? 'Sending...' : new Date(c.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span></div>
+                  <div className="flex justify-between items-center mb-2"><span className="font-bold text-slate-800 text-sm">{c.action_by_name}</span><span className="text-[10px] font-bold text-slate-400 uppercase">{c.isOptimistic ? 'Sending...' : new Date(c.created_at).toLocaleTimeString('en-GB', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit' })}</span></div>
                   <p className="text-sm text-slate-700 leading-relaxed">{c.comment_text}</p>
                 </div>
               ))}
