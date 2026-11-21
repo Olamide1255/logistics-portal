@@ -81,12 +81,14 @@ function MetricCard({
 
 export default function OperationsReportsPage() {
   const today = new Date();
-  const initialStart = new Date();
-  initialStart.setDate(initialStart.getDate() - 29);
+  const endDateDefault = localDate(today);
+  const initialStart = new Date(`${endDateDefault}T00:00:00Z`);
+  initialStart.setUTCDate(initialStart.getUTCDate() - 29);
+  const startDateDefault = initialStart.toISOString().slice(0, 10);
 
-  const [startDate, setStartDate] = useState(() => localDate(initialStart));
-  const [endDate, setEndDate] = useState(() => localDate(today));
-  const [appliedRange, setAppliedRange] = useState({ start: localDate(initialStart), end: localDate(today) });
+  const [startDate, setStartDate] = useState(startDateDefault);
+  const [endDate, setEndDate] = useState(endDateDefault);
+  const [appliedRange, setAppliedRange] = useState({ start: startDateDefault, end: endDateDefault });
   const [report, setReport] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -127,8 +129,8 @@ export default function OperationsReportsPage() {
       toast.error('Choose a valid start and end date.');
       return;
     }
-    const start = new Date(`${startDate}T00:00:00`);
-    const end = new Date(`${endDate}T00:00:00`);
+    const start = new Date(`${startDate}T00:00:00Z`);
+    const end = new Date(`${endDate}T00:00:00Z`);
     const days = Math.floor((end.getTime() - start.getTime()) / 86400000);
     if (days > 365) {
       toast.error('Choose a reporting period of no more than 366 days.');
