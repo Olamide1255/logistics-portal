@@ -38,10 +38,31 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname(); 
 
   const playNotificationSound = () => {
-    if (!preferencesRef.current.sound_alerts) return;
-    const audio = new Audio("data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU"+ "1234567890".repeat(20)); 
-    audio.volume = 1.0;
-    audio.play().catch((e) => console.log('Audio play blocked:', e));
+    if (!preferencesRef.current.sound_alerts || typeof window === 'undefined') return;
+
+    const AudioContextConstructor = window.AudioContext
+      || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextConstructor) return;
+
+    try {
+      const context = new AudioContextConstructor();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, context.currentTime);
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.16);
+
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.17);
+      oscillator.onended = () => { void context.close(); };
+    } catch {
+      // Browsers may block audio until the user interacts with the page.
+    }
   };
 
   const fetchNotifications = async (role: string) => {
