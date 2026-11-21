@@ -493,6 +493,15 @@ export default function ShipmentDetails() {
       setComments(prev => prev.map(c => c.id === tempId ? data : c));
     } catch (error) {
       setComments(prev => prev.filter(c => c.id !== tempId));
+      const isConnectivityFailure = !navigator.onLine
+        || error instanceof TypeError
+        || (error instanceof Error && error.message === 'Offline');
+
+      if (!isConnectivityFailure) {
+        toast.error(error instanceof Error ? `Comment could not be saved: ${error.message}` : 'Comment could not be saved.');
+        return;
+      }
+
       try {
         await queueAction('shipment_comments', 'INSERT', {
           shipment_id: shipment.id,
@@ -502,7 +511,6 @@ export default function ShipmentDetails() {
         });
         toast.warning('Comment saved on this device and will sync when this account reconnects.');
       } catch (queueError) {
-        setComments(prev => prev.filter(c => c.id !== tempId));
         toast.error(queueError instanceof Error ? queueError.message : 'Could not save the comment offline.');
       }
     }
