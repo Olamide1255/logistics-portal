@@ -2,8 +2,44 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { exportToCSV } from '@/lib/export';
-import { Users, Edit, Trash2, Save, X, Download, DollarSign } from 'lucide-react';
+import { Users, Edit, Trash2, Save, X, Download } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
+
+
+type ClientFinancialTotal = {
+  currency: string;
+  billed: number;
+  paid: number;
+  shipments: number;
+};
+
+function getClientFinancialTotals(client: any): ClientFinancialTotal[] {
+  const totals = new Map<string, ClientFinancialTotal>();
+  const getTotal = (currencyValue: string | null | undefined) => {
+    const currency = (currencyValue || 'NGN').trim().toUpperCase();
+    if (!totals.has(currency)) {
+      totals.set(currency, { currency, billed: 0, paid: 0, shipments: 0 });
+    }
+    return totals.get(currency)!;
+  };
+
+  for (const shipment of client.shipments || []) {
+    const shipmentTotal = getTotal(shipment.currency);
+    shipmentTotal.shipments += 1;
+    shipmentTotal.billed += Number(shipment.agreed_amount) || 0;
+
+    for (const payment of shipment.payments || []) {
+      const paymentTotal = getTotal(payment.currency || shipment.currency);
+      paymentTotal.paid += Number(payment.amount) || 0;
+    }
+  }
+
+  return [...totals.values()].sort((a, b) => a.currency.localeCompare(b.currency));
+}
+
+function formatCurrencyAmount(currency: string, amount: number) {
+  return `${currency} ${amount.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
 
 export default function ClientReports() {
   const [clients, setClients] = useState<any[]>([]);
@@ -31,9 +67,11 @@ export default function ClientReports() {
         shipments (
           id,
           agreed_amount,
+          currency,
           payment_status,
           payments (
-            amount
+            amount,
+            currency
           )
         )
       `)
@@ -51,22 +89,35 @@ export default function ClientReports() {
   const handleExportCSV = () => {
     if (clients.length === 0) return toast.error("No clients to export.");
     
-    const csvData = clients.map(c => {
-      const totalBilled = c.shipments?.reduce((sum: number, s: any) => sum + (parseFloat(s.agreed_amount) || 0), 0) || 0;
-      const totalPaid = c.shipments?.reduce((sum: number, s: any) => sum + (s.payments?.reduce((pSum: number, p: any) => pSum + parseFloat(p.amount), 0) || 0), 0) || 0;
-      return {
-        name: c.client_name,
-        shipments: c.shipments?.length || 0,
-        billed: totalBilled,
-        paid: totalPaid,
-        outstanding: totalBilled - totalPaid,
-        joined: new Date(c.created_at).toLocaleDateString()
-      };
+    const csvData = clients.flatMap((client) => {
+      const financialTotals = getClientFinancialTotals(client);
+      if (financialTotals.length === 0) {
+        return [{
+          name: client.client_name,
+          shipments: 0,
+          currency: '—',
+          billed: 0,
+          paid: 0,
+          outstanding: 0,
+          joined: new Date(client.created_at).toLocaleDateString(),
+        }];
+      }
+
+      return financialTotals.map((total) => ({
+        name: client.client_name,
+        shipments: total.shipments,
+        currency: total.currency,
+        billed: total.billed,
+        paid: total.paid,
+        outstanding: total.billed - total.paid,
+        joined: new Date(client.created_at).toLocaleDateString(),
+      }));
     });
 
     exportToCSV(csvData, `LogiFlow_Clients_${new Date().toISOString().split('T')[0]}`, [
       { key: 'name', label: 'Client Name' },
-      { key: 'shipments', label: 'Total Shipments' },
+      { key: 'shipments', label: 'Shipments in Currency' },
+      { key: 'currency', label: 'Currency' },
       { key: 'billed', label: 'Total Billed' },
       { key: 'paid', label: 'Total Paid' },
       { key: 'outstanding', label: 'Outstanding Balance' },
@@ -109,7 +160,7 @@ export default function ClientReports() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Client Reports</h1>
-          <p className="text-slate-500 mt-1 font-medium">Financial overview of all clients.</p>
+          <p className="text-slate-500 mt-1 font-medium">Client activity and financial balances, separated by currency.</p>
         </div>
         
         <div className="flex items-center gap-3">
@@ -121,6 +172,8 @@ export default function ClientReports() {
           </div>
         </div>
       </div>
+
+      <p className="text-xs text-slate-500">NGN and foreign-currency balances are shown separately. No exchange-rate conversion or cross-currency netting is applied.</p>
 
       <div className="bg-white rounded-2xl shadow-sm ring-1 ring-slate-200/60 overflow-hidden">
         <div className="overflow-x-auto">
@@ -141,9 +194,7 @@ export default function ClientReports() {
                 <tr><td colSpan={isSuperAdmin ? 6 : 5} className="px-6 py-8 text-center text-slate-500">No clients found.</td></tr>
               )}
               {clients.map((client) => {
-                const totalBilled = client.shipments?.reduce((sum: number, s: any) => sum + (parseFloat(s.agreed_amount) || 0), 0) || 0;
-                const totalPaid = client.shipments?.reduce((sum: number, s: any) => sum + (s.payments?.reduce((pSum: number, p: any) => pSum + parseFloat(p.amount), 0) || 0), 0) || 0;
-                const outstanding = totalBilled - totalPaid;
+                const financialTotals = getClientFinancialTotals(client);
 
                 return (
                   <tr key={client.id} className="hover:bg-slate-50/80 transition-colors group">
@@ -161,16 +212,32 @@ export default function ClientReports() {
                         {client.shipments?.length || 0} Total
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-slate-800">
-                      ₦{totalBilled.toLocaleString()}
+                    <td className="px-6 py-4">
+                      <div className="flex min-w-32 flex-col gap-1.5">
+                        {financialTotals.length === 0 ? <span className="text-sm text-slate-400">—</span> : financialTotals.map((total) => (
+                          <span key={total.currency} className="text-sm font-semibold text-slate-800">{formatCurrencyAmount(total.currency, total.billed)}</span>
+                        ))}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-emerald-600">
-                      ₦{totalPaid.toLocaleString()}
+                    <td className="px-6 py-4">
+                      <div className="flex min-w-32 flex-col gap-1.5">
+                        {financialTotals.length === 0 ? <span className="text-sm text-slate-400">—</span> : financialTotals.map((total) => (
+                          <span key={total.currency} className="text-sm font-semibold text-emerald-700">{formatCurrencyAmount(total.currency, total.paid)}</span>
+                        ))}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`py-1 px-3 rounded-md text-sm font-bold ring-1 ring-inset ${outstanding > 0 ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-slate-100 text-slate-500 ring-slate-200'}`}>
-                        ₦{outstanding.toLocaleString()}
-                      </span>
+                    <td className="px-6 py-4">
+                      <div className="flex min-w-32 flex-col items-start gap-1.5">
+                        {financialTotals.length === 0 ? <span className="text-sm text-slate-400">—</span> : financialTotals.map((total) => {
+                          const outstanding = total.billed - total.paid;
+                          return (
+                            <span key={total.currency} className={`rounded-md px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${outstanding > 0 ? 'bg-amber-50 text-amber-700 ring-amber-200' : outstanding < 0 ? 'bg-sky-50 text-sky-700 ring-sky-200' : 'bg-slate-100 text-slate-600 ring-slate-200'}`}>
+                              {formatCurrencyAmount(total.currency, outstanding)}
+                              {outstanding < 0 ? ' credit' : ''}
+                            </span>
+                          );
+                        })}
+                      </div>
                     </td>
                     {isSuperAdmin && (
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
