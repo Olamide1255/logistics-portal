@@ -89,7 +89,7 @@ Push notification delivery uses a private bearer secret stored in Supabase Vault
 
 - The database trigger reads `logiflow_webhook_secret` and `notify_function_url` from Vault.
 - The Edge Function retrieves the same secret through `get_notify_webhook_secret()`, which is executable only by the Supabase `service_role`.
-- The function has JWT gateway verification disabled because it performs its own constant-time-equivalent bearer comparison before processing a webhook. Do not expose the service-role key or Vault secret to browser code.
+- The function has JWT gateway verification disabled because it performs its own explicit bearer-token check before processing a webhook. Do not expose the service-role key or Vault secret to browser code.
 - The database uses `pg_net` to dispatch the webhook asynchronously. Notification inserts remain committed even if push delivery fails.
 
 For a new project, create the two Vault entries before enabling the notification trigger. Use that project's own function URL:
@@ -115,7 +115,7 @@ BEGIN
 END $;
 ```
 
-Never query or print the decrypted secret in logs, commits, support messages or browser responses. Deploy `supabase/functions/notify` with `verify_jwt=false`; its Vault-backed authentication is mandatory.
+Never manually query or print the decrypted secret in logs, commits, support messages or browser responses. Deploy `supabase/functions/notify` with `verify_jwt=false`; its Vault-backed authentication is mandatory.
 
 ## Application routes
 
