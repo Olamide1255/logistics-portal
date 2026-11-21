@@ -34,7 +34,14 @@ type QueueItem = {
   clients?: { client_name?: string } | null;
 };
 
-function localDate(date: Date) {\n  const year = date.getFullYear();\n  const month = String(date.getMonth() + 1).padStart(2, '0');\n  const day = String(date.getDate()).padStart(2, '0');\n  return `${year}-${month}-${day}`;\n}\n\nfunction StatCard({ label, value, detail, icon: Icon, tint }: {
+function localDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function StatCard({ label, value, detail, icon: Icon, tint }: {
   label: string; value: number; detail: string; icon: LucideIcon; tint: string;
 }) {
   return (
