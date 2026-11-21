@@ -17,7 +17,20 @@ type ReportData = {
     delivered_shipments: number;
     active_shipments: number;
     pending_payment_shipments: number;
+    overdue_delivery_shipments: number;
+    eligible_deliveries: number;
+    on_time_deliveries: number;
+    late_deliveries: number;
   };
+  delivery_performance: {
+    eligible_deliveries: number;
+    on_time_deliveries: number;
+    late_deliveries: number;
+    overdue_active_shipments: number;
+  };
+  receivables_by_currency: { currency: string; amount: number; invoice_count: number }[];
+  receivables_without_due_date: { currency: string; amount: number; invoice_count: number }[];
+  receivables_ageing: { currency: string; age_bucket: string; amount: number; invoice_count: number }[];
   status_breakdown: CountRow[];
   monthly_volume: { period: string; count: number }[];
   shipment_mix: CountRow[];
@@ -129,6 +142,13 @@ export default function OperationsReportsPage() {
       { section: 'Summary', metric: 'Delivered shipments', value: String(report.summary.delivered_shipments) },
       { section: 'Summary', metric: 'Active shipments', value: String(report.summary.active_shipments) },
       { section: 'Summary', metric: 'Pending payment shipments', value: String(report.summary.pending_payment_shipments) },
+      { section: 'Delivery performance', metric: 'Eligible deliveries', value: String(report.delivery_performance.eligible_deliveries) },
+      { section: 'Delivery performance', metric: 'On-time deliveries', value: String(report.delivery_performance.on_time_deliveries) },
+      { section: 'Delivery performance', metric: 'Late deliveries', value: String(report.delivery_performance.late_deliveries) },
+      { section: 'Delivery performance', metric: 'Active shipments past expected date', value: String(report.delivery_performance.overdue_active_shipments) },
+      ...report.receivables_by_currency.map((item) => ({ section: 'Open receivables', metric: item.currency, value: String(item.amount) })),
+      ...report.receivables_ageing.map((item) => ({ section: 'Receivables ageing', metric: `${item.currency} ${item.age_bucket}`, value: String(item.amount) })),
+      ...report.receivables_without_due_date.map((item) => ({ section: 'Receivables without due date', metric: item.currency, value: String(item.amount) })),
       ...report.agreed_value_by_currency.map((item) => ({ section: 'Agreed shipment value', metric: item.currency, value: String(item.amount) })),
       ...report.collections_by_currency.map((item) => ({ section: 'Recorded collections', metric: item.currency, value: String(item.amount) })),
       ...report.status_breakdown.map((item) => ({ section: 'Status', metric: item.label, value: String(item.count) })),
@@ -204,6 +224,31 @@ export default function OperationsReportsPage() {
             <MetricCard label="Delivered" value={report.summary.delivered_shipments} helper="Currently marked delivered" icon={CheckCircle2} tone="bg-emerald-50 text-emerald-600" />
             <MetricCard label="Active shipments" value={report.summary.active_shipments} helper="Not yet marked delivered" icon={TrendingUp} tone="bg-sky-50 text-sky-600" />
             <MetricCard label="Pending payment" value={report.summary.pending_payment_shipments} helper="Shipment payment status" icon={Clock3} tone="bg-amber-50 text-amber-600" />
+          </section>
+
+          <section className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-5"><h2 className="font-bold text-slate-900">Delivery performance</h2><p className="mt-1 text-xs text-slate-500">Delivered shipments in the selected period with an expected delivery date recorded.</p></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Eligible deliveries</p><p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">{report.delivery_performance.eligible_deliveries.toLocaleString('en-NG')}</p></div>
+                <div className="rounded-xl bg-emerald-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">On-time rate</p><p className="mt-2 text-2xl font-bold tabular-nums text-emerald-800">{report.delivery_performance.eligible_deliveries ? `${((report.delivery_performance.on_time_deliveries / report.delivery_performance.eligible_deliveries) * 100).toFixed(1)}%` : '—'}</p></div>
+                <div className="rounded-xl bg-emerald-50/70 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">On time</p><p className="mt-2 text-xl font-bold tabular-nums text-slate-900">{report.delivery_performance.on_time_deliveries.toLocaleString('en-NG')}</p></div>
+                <div className="rounded-xl bg-rose-50 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-rose-700">Late</p><p className="mt-2 text-xl font-bold tabular-nums text-rose-800">{report.delivery_performance.late_deliveries.toLocaleString('en-NG')}</p></div>
+              </div>
+              <div className="mt-4 flex items-center justify-between rounded-xl border border-amber-100 bg-amber-50/70 px-4 py-3"><span className="text-sm font-medium text-amber-800">Active shipments past expected date</span><strong className="text-lg tabular-nums text-amber-900">{report.delivery_performance.overdue_active_shipments.toLocaleString('en-NG')}</strong></div>
+              <p className="mt-3 text-xs leading-5 text-slate-400">On-time performance excludes shipments without an expected delivery date or a recorded delivery timestamp. Active overdue count is a current snapshot, independent of the selected period.</p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-5"><h2 className="font-bold text-slate-900">Receivables & ageing</h2><p className="mt-1 text-xs text-slate-500">Current unpaid agreed balances, grouped by currency. No exchange-rate conversion is applied.</p></div>
+              {report.receivables_by_currency.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">No open agreed balances recorded.</p> : <div className="space-y-3">{report.receivables_by_currency.map((item) => <div key={item.currency} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 p-3"><div><p className="text-xs font-semibold uppercase text-slate-500">{item.currency} open balance</p><p className="mt-1 text-lg font-bold tabular-nums text-slate-900">{currencyAmount(item.amount, item.currency)}</p></div><span className="text-xs text-slate-500">{item.invoice_count} shipments</span></div>)}</div>}
+              <div className="mt-5 border-t border-slate-100 pt-4">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-slate-500">Overdue ageing</h3>
+                {!report.receivables_ageing.length ? <p className="mt-3 text-sm text-slate-400">No overdue balances with due dates.</p> : <div className="mt-3 space-y-2">{report.receivables_ageing.map((item) => <div key={`${item.currency}-${item.age_bucket}`} className="flex items-center justify-between gap-3 text-sm"><span className="text-slate-600">{item.currency} · {item.age_bucket} <span className="text-xs text-slate-400">({item.invoice_count})</span></span><strong className="tabular-nums text-slate-900">{currencyAmount(item.amount, item.currency)}</strong></div>)}</div>}
+              </div>
+              {report.receivables_without_due_date.length > 0 && <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50/70 p-3"><p className="text-xs font-semibold text-amber-800">Outstanding balances without due dates</p>{report.receivables_without_due_date.map((item) => <p key={item.currency} className="mt-1 text-sm text-amber-900">{currencyAmount(item.amount, item.currency)} · {item.invoice_count} shipments</p>)}</div>}
+              <p className="mt-3 text-xs leading-5 text-slate-400">Receivables are a current snapshot. Ageing uses the recorded payment due date and remaining agreed balance after recorded payments.</p>
+            </div>
           </section>
 
           <section className="grid grid-cols-1 gap-5 xl:grid-cols-2">

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import {
-  Activity, ArrowRight, BarChart3, CalendarDays, CheckCircle2, Clock3,
+  Activity, AlertTriangle, ArrowRight, BarChart3, CalendarDays, CheckCircle2, Clock3,
   Loader2, Package, Plane, RefreshCw, ShieldCheck, Truck, Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -18,6 +18,7 @@ type Overview = {
     created_in_period: number;
     delivered_in_period: number;
     active_shipments: number;
+    overdue_delivery_shipments: number;
   };
   status_breakdown: CountRow[];
   daily_volume: { day: string; count: number }[];
@@ -130,8 +131,8 @@ export default function Dashboard() {
         supabase.from('shipments_secure').select('id', { count: 'exact', head: true }).eq('current_status', 'Booked'),
         supabase.from('shipments_secure').select('id', { count: 'exact', head: true }).in('current_status', ['Picked Up', 'Handed to Ops']),
         supabase.rpc('get_operational_overview', {
-          p_start_date: new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10),
-          p_end_date: new Date().toISOString().slice(0, 10),
+          p_start_date: localDate(new Date(Date.now() - 29 * 86400000)),
+          p_end_date: localDate(new Date()),
         }),
       ]);
 
@@ -226,11 +227,12 @@ export default function Dashboard() {
 
       {loadError && <div className="flex flex-col gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-rose-900">Some dashboard data could not be loaded.</p><p className="mt-1 text-sm text-rose-700">Retry to refresh your shipment metrics and action queue.</p></div><button onClick={() => void fetchDashboardData()} className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-rose-700 shadow-sm ring-1 ring-rose-200">Try again</button></div>}
 
-      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Total shipments" value={overview?.summary.total_shipments ?? stats.total} detail="Across your company workspace" icon={Package} tint="bg-indigo-50 text-indigo-600" />
         <StatCard label="New this period" value={overview?.summary.created_in_period ?? 0} detail="Registered in the last 30 days" icon={CalendarDays} tint="bg-sky-50 text-sky-600" />
         <StatCard label="Active shipments" value={overview?.summary.active_shipments ?? 0} detail="Not currently marked delivered" icon={Truck} tint="bg-amber-50 text-amber-600" />
         <StatCard label="Delivered this period" value={overview?.summary.delivered_in_period ?? 0} detail="Currently marked delivered" icon={CheckCircle2} tint="bg-emerald-50 text-emerald-600" />
+        <StatCard label="Past expected date" value={overview?.summary.overdue_delivery_shipments ?? 0} detail="Active shipments past ETA" icon={AlertTriangle} tint="bg-rose-50 text-rose-600" />
       </section>
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

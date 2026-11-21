@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams, useRouter } from 'next/navigation';
-import { CheckCircle, Clock, MessageSquare, Send, ArrowLeft, Edit, Trash2, Save, X, WifiOff, Plane, Anchor, Paperclip, Upload, FileText, Download, DollarSign, Plus } from 'lucide-react';
+import { CheckCircle, Clock, MessageSquare, Send, ArrowLeft, Edit, Trash2, Save, X, WifiOff, Plane, Anchor, Paperclip, Upload, FileText, Download, DollarSign, Plus, Share2 } from 'lucide-react';
 import Link from 'next/link';
 import { queueAction, processQueue } from '@/lib/offlineSync';
 import { toast, Toaster } from 'sonner';
@@ -27,6 +27,7 @@ export default function ShipmentDetails() {
   const [userRole, setUserRole] = useState<string>('');
   const [isOnline, setIsOnline] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [trackingToken, setTrackingToken] = useState<string>('');
 
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
@@ -45,27 +46,50 @@ export default function ShipmentDetails() {
   const [paymentMethod, setPaymentMethod] = useState('Bank Transfer');
   const [paymentRef, setPaymentRef] = useState('');
 
+  const copyTrackingLink = async () => {
+    if (!trackingToken) { toast.error('A tracking link is not available yet.'); return; }
+    const url = `${window.location.origin}/track/${trackingToken}`;
+    try { await navigator.clipboard.writeText(url); toast.success('Customer tracking link copied.'); }
+    catch { toast.error('Could not copy the tracking link. Check browser clipboard permissions.'); }
+  };
+
   const fetchData = async () => {
     setLoading(true);
     setIsOnline(navigator.onLine);
     if (navigator.onLine) processQueue();
 
     const { data: { user } } = await supabase.auth.getUser();
+    let currentRole = 'Unknown';
     if (user) {
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-      setUserRole(profile?.role || 'Unknown');
+      currentRole = profile?.role || 'Unknown';
+      setUserRole(currentRole);
     }
 
     const { data: shipData, error } = await supabase
       .from('shipments_secure')
-      .select(`*, clients (client_name)`)
+      .select(`*, tracking_token, clients (client_name)`)
       .ilike('awb_number', awb)
       .single();
     
     if (error) { console.error(error); setLoading(false); return; }
 
-    setShipment(shipData);
-    setEditFormData(shipData);
+    let safeShipment = shipData;
+    const financialRoles = ['Super Admin', 'Customer Service', 'Finance', 'Freight', 'Platform Admin'];
+    if (shipData?.id && financialRoles.includes(currentRole)) {
+      const { data: financials, error: financialError } = await supabase.rpc('get_shipment_financials', {
+        p_shipment_id: shipData.id,
+      });
+      if (financialError) {
+        console.error('Shipment financial details could not be loaded:', financialError);
+      } else if (financials && typeof financials === 'object') {
+        safeShipment = { ...shipData, ...financials };
+      }
+    }
+
+    setShipment(safeShipment);
+    setEditFormData(safeShipment);
+    setTrackingToken(safeShipment.tracking_token || '');
 
     if (shipData) {
       const { data: timeData } = await supabase.from('shipment_timeline').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false });
@@ -271,17 +295,26 @@ export default function ShipmentDetails() {
       let storagePath = document.file_path || document.file_url;
       if (!storagePath) throw new Error('This document has no stored file path.');
 
-      // Older records may contain a Supabase object URL instead of a storage path.
+      // Legacy records may contain a Supabase Storage URL. Never navigate to
+      // arbitrary external URLs from a database-backed document reference.
       if (/^https?:\/\//i.test(storagePath)) {
-        const bucketMarker = '/shipment-documents/';
-        const bucketIndex = storagePath.indexOf(bucketMarker);
-        if (bucketIndex >= 0) {
-          storagePath = decodeURIComponent(storagePath.slice(bucketIndex + bucketMarker.length).split('?')[0]);
-        } else {
-          if (newWindow) newWindow.location.href = storagePath;
-          else window.location.assign(storagePath);
-          return;
+        const parsedUrl = new URL(storagePath);
+        const configuredUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        if (!configuredUrl || parsedUrl.origin !== new URL(configuredUrl).origin) {
+          throw new Error('This document reference is not a trusted storage URL.');
         }
+
+        const bucketMarker = '/storage/v1/object/';
+        const bucketIndex = parsedUrl.pathname.indexOf(bucketMarker);
+        const objectPath = bucketIndex >= 0
+          ? parsedUrl.pathname.slice(bucketIndex + bucketMarker.length)
+          : '';
+        const pathSegments = objectPath.split('/');
+        if (['public', 'sign', 'authenticated'].includes(pathSegments[0])) pathSegments.shift();
+        if (pathSegments.shift() !== 'shipment-documents' || pathSegments.length === 0) {
+          throw new Error('This document is not stored in the private shipment bucket.');
+        }
+        storagePath = decodeURIComponent(pathSegments.join('/'));
       }
 
       const { data, error } = await supabase.storage
@@ -479,6 +512,8 @@ export default function ShipmentDetails() {
         agreed_amount: editFormData.agreed_amount ? parseFloat(editFormData.agreed_amount) : null,
         rate: editFormData.rate ? parseFloat(editFormData.rate) : null,
         currency: editFormData.currency,
+        expected_delivery_date: editFormData.expected_delivery_date || null,
+        payment_due_date: editFormData.payment_due_date || null,
       }).eq('id', shipment.id);
       if (updateError) throw updateError;
 
@@ -613,6 +648,9 @@ export default function ShipmentDetails() {
           </div>
         </div>
         <div className="flex flex-col md:flex-row gap-2 md:items-center">
+          <button type="button" onClick={copyTrackingLink} disabled={!trackingToken} className="px-4 py-2 rounded-xl font-bold text-sm inline-flex items-center justify-center gap-2 bg-indigo-600 text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors">
+            <Share2 size={15} /> Share customer tracking
+          </button>
           <div className={`px-4 py-2 rounded-xl font-bold text-sm inline-flex items-center gap-2 ring-1 ring-inset ${shipment.payment_status === 'Approved' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-amber-200'}`}>
             <span className={`w-2 h-2 rounded-full ${shipment.payment_status === 'Approved' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span> Payment: {shipment.payment_status}
           </div>
@@ -637,6 +675,8 @@ export default function ShipmentDetails() {
                       <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Agreed Amount</label><div className="flex gap-2"><select name="currency" value={editFormData.currency || 'NGN'} onChange={handleEditChange} className="w-24 border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white font-semibold"><option value="NGN">NGN</option><option value="USD">USD</option></select><input type="number" step="0.01" name="agreed_amount" value={editFormData.agreed_amount || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div></div>
                     </>
                   )}
+                  <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Expected Delivery Date</label><input type="date" name="expected_delivery_date" value={editFormData.expected_delivery_date || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white" /></div>
+                  <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Payment Due Date</label><input type="date" name="payment_due_date" value={editFormData.payment_due_date || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white" /></div>
                   <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Commodity</label><input name="commodity_type" value={editFormData.commodity_type || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
                   <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Sender</label><input name="sender_details" value={editFormData.sender_details || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
                   <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Receiver</label><input name="receiver_details" value={editFormData.receiver_details || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
@@ -652,6 +692,9 @@ export default function ShipmentDetails() {
                   <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Destination</span> <span className="text-slate-900 font-semibold">{shipment.destination}</span></div>
                   <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Commodity</span> <span className="text-slate-900 font-semibold">{shipment.commodity_type}</span></div>
                   <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Weight / Dims</span> <span className="text-slate-900 font-semibold">{shipment.weight} kg / {shipment.dimensions}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Expected Delivery</span> <span className="text-slate-900 font-semibold">{shipment.expected_delivery_date ? new Date(`${shipment.expected_delivery_date}T00:00:00`).toLocaleDateString('en-GB') : 'Not set'}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Payment Due</span> <span className="text-slate-900 font-semibold">{shipment.payment_due_date ? new Date(`${shipment.payment_due_date}T00:00:00`).toLocaleDateString('en-GB') : 'Not set'}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Delivered At</span> <span className="text-slate-900 font-semibold">{shipment.delivered_at ? new Date(shipment.delivered_at).toLocaleString('en-GB') : 'Not recorded'}</span></div>
                   
                   {canSeeFinancials && (
                     <div className="md:col-span-2 grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mt-2">

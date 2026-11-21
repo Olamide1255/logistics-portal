@@ -44,7 +44,7 @@ export default function RegisterShipment() {
   const initialFormState = {
     awb_number: '', client_name: '', shipment_type: 'Export', service_type: 'DDP',
     agreed_amount: '', rate: '', currency: 'NGN', sender_details: '',
-    receiver_details: '', weight: '', dimensions: '', origin: '', destination: '', commodity_type: '',
+    receiver_details: '', weight: '', dimensions: '', origin: '', destination: '', commodity_type: '', expected_delivery_date: '', payment_due_date: '',
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -60,7 +60,7 @@ export default function RegisterShipment() {
     setSuccess('');
 
     try {
-      const { data: existingShipment } = await supabase.from('shipments').select('awb_number').eq('awb_number', formData.awb_number).maybeSingle(); 
+      const { data: existingShipment } = await supabase.from('shipments_secure').select('awb_number').eq('awb_number', formData.awb_number).maybeSingle(); 
       if (existingShipment) throw new Error('A shipment with this AWB Number already exists!');
 
       let clientId;
@@ -81,6 +81,8 @@ export default function RegisterShipment() {
           sender_details: formData.sender_details, receiver_details: formData.receiver_details,
           weight: parseFloat(formData.weight), dimensions: formData.dimensions, origin: formData.origin,
           destination: formData.destination, commodity_type: formData.commodity_type,
+          expected_delivery_date: formData.expected_delivery_date || null,
+          payment_due_date: formData.payment_due_date || null,
           current_status: 'Registered', payment_status: 'Pending',
         }
       ]);
@@ -153,6 +155,25 @@ export default function RegisterShipment() {
           <div><label className="block text-sm font-bold text-slate-700 mb-1">Origin *</label><input required name="origin" value={formData.origin} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. Lagos (LOS)" /></div>
           <div><label className="block text-sm font-bold text-slate-700 mb-1">Destination *</label><input required name="destination" value={formData.destination} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. London (LHR)" /></div>
           <div><label className="block text-sm font-bold text-slate-700 mb-1">Commodity Type *</label><input required name="commodity_type" value={formData.commodity_type} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" placeholder="e.g. Electronics" /></div>
+        </div>
+
+        <div className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-5">
+          <div className="mb-4">
+            <h2 className="text-sm font-bold text-slate-900">Service commitments</h2>
+            <p className="mt-1 text-xs text-slate-500">Optional dates used for delivery performance and receivables reporting.</p>
+          </div>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-slate-700">Expected delivery date</label>
+              <input type="date" name="expected_delivery_date" value={formData.expected_delivery_date} onChange={handleChange} className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20" />
+              <p className="mt-1 text-xs text-slate-400">Used to calculate on-time and late deliveries.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-semibold text-slate-700">Payment due date</label>
+              <input type="date" name="payment_due_date" value={formData.payment_due_date} onChange={handleChange} className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20" />
+              <p className="mt-1 text-xs text-slate-400">Used to calculate outstanding receivables ageing.</p>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
