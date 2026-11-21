@@ -175,41 +175,54 @@ export default function ShipmentDetails() {
     if (!Number.isFinite(amount) || amount <= 0) {
       return toast.error('Enter a valid payment amount greater than zero.');
     }
+    if (agreedAmount > 0 && amount > Math.max(balance, 0)) {
+      return toast.error('Payment cannot exceed the outstanding shipment balance.');
+    }
+    if (paymentRef.length > 255) {
+      return toast.error('Payment reference cannot exceed 255 characters.');
+    }
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.from('payments').insert([{
-        company_id: shipment.company_id,
-        shipment_id: shipment.id,
-        amount,
-        currency: shipment.currency,
-        payment_method: paymentMethod,
-        reference: paymentRef
-      }]);
+      const { data: paymentResult, error } = await supabase.rpc('record_shipment_payment', {
+        p_shipment_id: shipment.id,
+        p_amount: amount,
+        p_payment_method: paymentMethod,
+        p_reference: paymentRef.trim() || null,
+      });
       if (error) throw error;
 
-      // Auto-approve shipment if fully paid. A payment remains recorded even
-      // if the separate shipment-status update needs an administrator's attention.
-      if (agreedAmount > 0 && totalPaid + amount >= agreedAmount) {
-        const { error: approvalError } = await supabase
-          .from('shipments')
-          .update({ payment_status: 'Approved' })
-          .eq('id', shipment.id);
-        if (approvalError) {
-          toast.warning('Payment was recorded, but the shipment payment status could not be updated.');
+      if (paymentResult?.auto_approved) {
+        const messages = [
+          {
+            role_target: 'Freight',
+            title: 'Action Needed: Book Shipment',
+            message: `Finance (${actionBy}) recorded full payment for AWB ${shipment.awb_number}. Please book space.`,
+            shipment_awb: shipment.awb_number,
+          },
+          {
+            role_target: 'Customer Service',
+            title: 'Payment Approved',
+            message: `Finance (${actionBy}) recorded full payment for AWB ${shipment.awb_number}. Awaiting Freight booking.`,
+            shipment_awb: shipment.awb_number,
+          },
+        ];
+        const { error: notificationError } = await supabase.from('notifications').insert(messages);
+        if (notificationError) toast.warning('Payment was recorded and approved, but team notifications could not be created.');
+        else toast.success('Payment recorded. The shipment is now fully paid and approved.');
+      } else {
+        toast.success('Payment recorded successfully.');
+        if (agreedAmount <= 0) {
+          toast.info('No agreed shipment amount is set. Payment approval remains a separate Finance action.');
         }
       }
 
-      toast.success("Payment recorded successfully!");
-      if (agreedAmount <= 0) {
-        toast.info('No agreed shipment amount is set. Payment approval remains a separate finance action.');
-      }
       setShowPaymentModal(false);
       setPaymentAmount('');
       setPaymentRef('');
-      await fetchData(); // Refresh ledger
-    } catch (error: any) {
-      toast.error(error.message);
+      await fetchData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to record this payment.');
     } finally {
       setIsSubmitting(false);
     }
@@ -948,20 +961,20 @@ export default function ShipmentDetails() {
 
       {/* RECORD PAYMENT MODAL */}
       {showPaymentModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-labelledby="record-payment-title" className="my-auto w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-bold text-slate-800">Record Payment</h3>
-              <button type="button" onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+              <h3 id="record-payment-title" className="font-bold text-slate-800">Record Payment</h3>
+              <button type="button" aria-label="Close payment dialog" onClick={() => setShowPaymentModal(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"><X size={20}/></button>
             </div>
             <form onSubmit={handleRecordPayment} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Amount Paid ({shipment.currency})</label>
-                <input type="number" step="0.01" required value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 font-bold" placeholder={`Max: ${balance}`} />
+                <label htmlFor="payment-amount" className="block text-xs font-bold text-slate-500 uppercase mb-1">Amount Paid ({shipment.currency})</label>
+                <input id="payment-amount" type="number" min="0.01" max={agreedAmount > 0 ? Math.max(balance, 0) : undefined} step="0.01" required value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 font-bold" placeholder={`Max: ${balance}`} />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Payment Method</label>
-                <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 bg-white">
+                <label htmlFor="payment-method" className="block text-xs font-bold text-slate-500 uppercase mb-1">Payment Method</label>
+                <select id="payment-method" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 bg-white">
                   <option value="Bank Transfer">Bank Transfer</option>
                   <option value="Cash">Cash</option>
                   <option value="Cheque">Cheque</option>
@@ -969,8 +982,8 @@ export default function ShipmentDetails() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Transaction Reference</label>
-                <input type="text" value={paymentRef} onChange={e => setPaymentRef(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="Optional e.g. GTB-12345" />
+                <label htmlFor="payment-reference" className="block text-xs font-bold text-slate-500 uppercase mb-1">Transaction Reference</label>
+                <input id="payment-reference" type="text" maxLength={255} value={paymentRef} onChange={e => setPaymentRef(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="Optional e.g. GTB-12345" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Recorded By (Your Name)</label>
