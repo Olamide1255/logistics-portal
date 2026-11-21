@@ -35,7 +35,7 @@ begin
   where p.id = actor_id
     and p.company_id = actor_company_id;
 
-  if actor_email is null then
+  if nullif(btrim(actor_email), '') is null then
     raise exception 'An active company profile is required to record payments'
       using errcode = '42501';
   end if;
@@ -57,7 +57,7 @@ begin
       using errcode = '42501';
   end if;
 
-  if new.amount is null or new.amount <= 0 then
+  if new.amount is null or new.amount <= 0 or new.amount::text in ('NaN', 'Infinity', '-Infinity') then
     raise exception 'Payment amount must be greater than zero'
       using errcode = '22023';
   end if;
