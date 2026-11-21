@@ -10,6 +10,7 @@ export default function EmployeeManagement() {
   const [loadError, setLoadError] = useState(false);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [companyId, setCompanyId] = useState<string>('');
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const [showInvite, setShowInvite] = useState(false);
@@ -26,6 +27,8 @@ export default function EmployeeManagement() {
       setLoading(false);
       return;
     }
+
+    setCurrentUserId(user.id);
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
@@ -184,7 +187,7 @@ const res = await fetch('/api/invite', {
               <tr key={emp.id} className="hover:bg-slate-50/80">
                 <td className="px-6 py-4 font-bold text-slate-900">{emp.email}</td>
                 <td className="px-6 py-4">
-                  <label className="sr-only" htmlFor={`employee-role-${emp.id}`}>Role for {emp.email}</label><select id={`employee-role-${emp.id}`} value={emp.role} onChange={(e) => handleUpdate(emp.id, 'role', e.target.value)} disabled={updatingId === emp.id || emp.is_platform_admin} className="border border-slate-200 p-2 rounded-lg text-sm text-slate-900 bg-white disabled:opacity-50">
+                  <label className="sr-only" htmlFor={`employee-role-${emp.id}`}>Role for {emp.email}</label><select id={`employee-role-${emp.id}`} value={emp.role} onChange={(e) => handleUpdate(emp.id, 'role', e.target.value)} disabled={updatingId === emp.id || emp.is_platform_admin || emp.id === currentUserId} aria-label={`Role for ${emp.email}`} title={emp.id === currentUserId ? 'You cannot change your own role.' : 'Update employee role'} className="border border-slate-200 p-2 rounded-lg text-sm text-slate-900 bg-white disabled:opacity-50">
                     <option value="Super Admin">Super Admin</option>
                     <option value="Customer Service">Customer Service</option>
                     <option value="Finance">Finance</option>
