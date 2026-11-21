@@ -7,8 +7,13 @@ export const exportToCSV = (data: any[], filename: string, columns: { key: strin
   // Create data rows (handle commas inside strings)
   const rows = data.map(row => {
     return columns.map(c => {
-      const val = row[c.key] || '';
-      return `"${String(val).replace(/"/g, '""')}"`; // Escape quotes
+      const val = row[c.key] ?? '';
+      const text = String(val);
+      // Spreadsheet cells beginning with formula operators must be escaped.
+      const safeText = typeof val === 'string' && /^[\\u0000-\\u0020]*[=+\\-@]/.test(text)
+        ? `'${text}`
+        : text;
+      return `"${safeText.replace(/"/g, '""')}"`; // Escape quotes and formula injection
     }).join(',');
   });
 
