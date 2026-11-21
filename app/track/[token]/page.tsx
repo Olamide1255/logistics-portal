@@ -18,7 +18,7 @@ type TrackingData = {
 };
 
 const dateTime = (value?: string | null) => value
-  ? new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+  ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Lagos', dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
   : 'Pending update';
 
 function TrackingContent() {
@@ -95,7 +95,7 @@ function TrackingContent() {
                   <div>
                     <p className="text-xs font-bold uppercase tracking-wider text-indigo-600">Estimated delivery</p>
                     <p className="mt-1 text-base font-extrabold text-slate-900">
-                      {new Intl.DateTimeFormat('en', { dateStyle: 'long' }).format(new Date(`${shipment.expected_delivery_date}T12:00:00`))}
+                      {new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Lagos', dateStyle: 'long' }).format(new Date(`${shipment.expected_delivery_date}T12:00:00Z`))}
                     </p>
                   </div>
                   <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">Target date</span>
