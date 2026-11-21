@@ -81,7 +81,8 @@ function MetricCard({
 
 export default function OperationsReportsPage() {
   const today = new Date();
-  const initialStart = new Date(Date.now() - 29 * 86400000);
+  const initialStart = new Date();
+  initialStart.setDate(initialStart.getDate() - 29);
 
   const [startDate, setStartDate] = useState(() => localDate(initialStart));
   const [endDate, setEndDate] = useState(() => localDate(today));
