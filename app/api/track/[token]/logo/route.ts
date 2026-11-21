@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { rateLimit } from '@/lib/rateLimit';
+import { getClientIP, rateLimit } from '@/lib/rateLimit';
 
 const TOKEN_PATTERN = /^[a-f0-9]{64}$/;
 const COMPANY_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -21,8 +21,11 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid tracking token.' }, { status: 404 });
     }
 
-    const limit = await rateLimit(`public_tracking_logo:${token}`, 60, 60 * 60 * 1000);
-    if (!limit.success) return redirectToFallback(request.url);
+    const [tokenLimit, ipLimit] = await Promise.all([
+      rateLimit(`public_tracking_logo:${token}`, 60, 60 * 60 * 1000),
+      rateLimit(`public_tracking_logo_ip:${getClientIP(request)}`, 120, 60 * 60 * 1000),
+    ]);
+    if (!tokenLimit.success || !ipLimit.success) return redirectToFallback(request.url);
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
