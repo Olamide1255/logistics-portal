@@ -213,7 +213,7 @@ export default function OperationsReportsPage() {
 
       {!loading && loadError && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-8 text-center">
-          <p className="font-semibold text-rose-900">We couldn't load this report.</p>
+          <p className="font-semibold text-rose-900">We couldn&apos;t load this report.</p>
           <p className="mt-1 text-sm text-rose-700">Check that you have Finance or Super Admin access and try again.</p>
           <button onClick={loadReport} className="mt-4 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-rose-700 shadow-sm ring-1 ring-rose-200">Try again</button>
         </div>
