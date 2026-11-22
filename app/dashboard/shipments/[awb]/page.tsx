@@ -24,10 +24,12 @@ export default function ShipmentDetails() {
   const [documents, setDocuments] = useState<any[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [userRole, setUserRole] = useState<string>('');
   const [isOnline, setIsOnline] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [trackingToken, setTrackingToken] = useState<string>('');
+  const [companyName, setCompanyName] = useState('LogiFlow');
 
   const [isEditing, setIsEditing] = useState(false);
   const [editFormData, setEditFormData] = useState<any>({});
@@ -55,55 +57,80 @@ export default function ShipmentDetails() {
 
   const fetchData = async () => {
     setLoading(true);
+    setLoadError(false);
     setIsOnline(navigator.onLine);
-    if (navigator.onLine) processQueue();
+    if (navigator.onLine) void processQueue();
 
-    const { data: { user } } = await supabase.auth.getUser();
+    // Authentication and shipment lookup are independent and can run together.
+    const [authResult, shipmentResult] = await Promise.all([
+      supabase.auth.getUser(),
+      supabase
+        .from('shipments_secure')
+        .select(`*, tracking_token, clients (client_name)`)
+        .ilike('awb_number', awb)
+        .single(),
+    ]);
+
+    const user = authResult.data.user;
+    setActionBy(user?.email || '');
+    setCommentBy(user?.email || '');
     let currentRole = 'Unknown';
     if (user) {
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      if (profileError) console.error('Shipment profile lookup failed:', profileError);
       currentRole = profile?.role || 'Unknown';
       setUserRole(currentRole);
     }
 
-    const { data: shipData, error } = await supabase
-      .from('shipments_secure')
-      .select(`*, tracking_token, clients (client_name)`)
-      .ilike('awb_number', awb)
-      .single();
-    
-    if (error) { console.error(error); setLoading(false); return; }
-
-    let safeShipment = shipData;
-    const financialRoles = ['Super Admin', 'Customer Service', 'Finance', 'Freight', 'Platform Admin'];
-    if (shipData?.id && financialRoles.includes(currentRole)) {
-      const { data: financials, error: financialError } = await supabase.rpc('get_shipment_financials', {
-        p_shipment_id: shipData.id,
-      });
-      if (financialError) {
-        console.error('Shipment financial details could not be loaded:', financialError);
-      } else if (financials && typeof financials === 'object') {
-        safeShipment = { ...shipData, ...financials };
-      }
+    const { data: shipData, error: shipmentError } = shipmentResult;
+    if (shipmentError || !shipData) {
+      console.error('Shipment lookup failed:', shipmentError);
+      setLoadError(true);
+      setLoading(false);
+      return;
     }
+
+    const financialRoles = ['Super Admin', 'Customer Service', 'Finance', 'Freight', 'Platform Admin'];
+    const canViewFinancials = financialRoles.includes(currentRole);
+
+    // All shipment sub-panels load concurrently. A slow document or ledger
+    // query no longer blocks the timeline, comments and shipment header.
+    const [financialResult, timelineResult, commentsResult, documentsResult, paymentsResult, companyResult] = await Promise.all([
+      canViewFinancials
+        ? supabase.rpc('get_shipment_financials', { p_shipment_id: shipData.id })
+        : Promise.resolve({ data: null, error: null }),
+      supabase.from('shipment_timeline').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false }),
+      supabase.from('shipment_comments').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: true }),
+      supabase.from('shipment_documents').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false }),
+      supabase.from('payments').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false }),
+      shipData.company_id
+        ? supabase.from('companies').select('name').eq('id', shipData.company_id).maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+
+    if (financialResult.error) console.error('Shipment financial details could not be loaded:', financialResult.error);
+    if (timelineResult.error) console.error('Shipment timeline could not be loaded:', timelineResult.error);
+    if (commentsResult.error) console.error('Shipment comments could not be loaded:', commentsResult.error);
+    if (documentsResult.error) console.error('Shipment documents could not be loaded:', documentsResult.error);
+    if (paymentsResult.error) console.error('Shipment payment ledger could not be loaded:', paymentsResult.error);
+    if (companyResult.error) console.error('Tenant branding could not be loaded:', companyResult.error);
+
+    const safeShipment = financialResult.data && typeof financialResult.data === 'object'
+      ? { ...shipData, ...financialResult.data }
+      : shipData;
 
     setShipment(safeShipment);
     setEditFormData(safeShipment);
     setTrackingToken(safeShipment.tracking_token || '');
-
-    if (shipData) {
-      const { data: timeData } = await supabase.from('shipment_timeline').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false });
-      setTimeline(timeData || []);
-
-      const { data: commData } = await supabase.from('shipment_comments').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: true });
-      setComments(commData || []);
-
-      const { data: docData } = await supabase.from('shipment_documents').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false });
-      setDocuments(docData || []);
-
-      const { data: payData } = await supabase.from('payments').select('*').eq('shipment_id', shipData.id).order('created_at', { ascending: false });
-      setPayments(payData || []);
-    }
+    setCompanyName(companyResult.data?.name?.trim() || 'LogiFlow');
+    setTimeline(timelineResult.data || []);
+    setComments(commentsResult.data || []);
+    setDocuments(documentsResult.data || []);
+    setPayments(paymentsResult.data || []);
     setLoading(false);
   };
 
@@ -149,41 +176,54 @@ export default function ShipmentDetails() {
     if (!Number.isFinite(amount) || amount <= 0) {
       return toast.error('Enter a valid payment amount greater than zero.');
     }
+    if (agreedAmount > 0 && amount > Math.max(balance, 0)) {
+      return toast.error('Payment cannot exceed the outstanding shipment balance.');
+    }
+    if (paymentRef.length > 255) {
+      return toast.error('Payment reference cannot exceed 255 characters.');
+    }
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.from('payments').insert([{
-        company_id: shipment.company_id,
-        shipment_id: shipment.id,
-        amount,
-        currency: shipment.currency,
-        payment_method: paymentMethod,
-        reference: paymentRef
-      }]);
+      const { data: paymentResult, error } = await supabase.rpc('record_shipment_payment', {
+        p_shipment_id: shipment.id,
+        p_amount: amount,
+        p_payment_method: paymentMethod,
+        p_reference: paymentRef.trim() || null,
+      });
       if (error) throw error;
 
-      // Auto-approve shipment if fully paid. A payment remains recorded even
-      // if the separate shipment-status update needs an administrator's attention.
-      if (agreedAmount > 0 && totalPaid + amount >= agreedAmount) {
-        const { error: approvalError } = await supabase
-          .from('shipments')
-          .update({ payment_status: 'Approved' })
-          .eq('id', shipment.id);
-        if (approvalError) {
-          toast.warning('Payment was recorded, but the shipment payment status could not be updated.');
+      if (paymentResult?.auto_approved) {
+        const messages = [
+          {
+            role_target: 'Freight',
+            title: 'Action Needed: Book Shipment',
+            message: `Finance (${actionBy}) recorded full payment for AWB ${shipment.awb_number}. Please book space.`,
+            shipment_awb: shipment.awb_number,
+          },
+          {
+            role_target: 'Customer Service',
+            title: 'Payment Approved',
+            message: `Finance (${actionBy}) recorded full payment for AWB ${shipment.awb_number}. Awaiting Freight booking.`,
+            shipment_awb: shipment.awb_number,
+          },
+        ];
+        const { error: notificationError } = await supabase.from('notifications').insert(messages);
+        if (notificationError) toast.warning('Payment was recorded and approved, but team notifications could not be created.');
+        else toast.success('Payment recorded. The shipment is now fully paid and approved.');
+      } else {
+        toast.success('Payment recorded successfully.');
+        if (agreedAmount <= 0) {
+          toast.info('No agreed shipment amount is set. Payment approval remains a separate Finance action.');
         }
       }
 
-      toast.success("Payment recorded successfully!");
-      if (agreedAmount <= 0) {
-        toast.info('No agreed shipment amount is set. Payment approval remains a separate finance action.');
-      }
       setShowPaymentModal(false);
       setPaymentAmount('');
       setPaymentRef('');
-      await fetchData(); // Refresh ledger
-    } catch (error: any) {
-      toast.error(error.message);
+      await fetchData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to record this payment.');
     } finally {
       setIsSubmitting(false);
     }
@@ -202,7 +242,7 @@ export default function ShipmentDetails() {
     const matchingType = allowedFileTypes[file.type];
 
     if (!actionBy.trim()) {
-      toast.error('Enter your name in the "Action By" field before uploading.');
+      toast.error('Your authenticated account could not be identified. Sign in again before uploading.');
       e.target.value = '';
       return;
     }
@@ -334,7 +374,7 @@ export default function ShipmentDetails() {
     const doc = new jsPDF();
     doc.setFontSize(20);
     doc.setTextColor(79, 70, 229); 
-    doc.text("MARCHLOG LOGISTICS", 14, 22);
+    doc.text(companyName.toUpperCase(), 14, 22);
     doc.setFontSize(10);
     doc.setTextColor(100);
     doc.text("Official Shipment Manifest", 14, 28);
@@ -381,23 +421,15 @@ export default function ShipmentDetails() {
   };
 
   const handleFreightBooked = async () => {
-    if (!actionBy) return alert('Please enter your name in the "Action By" field.');
+    if (!actionBy) return toast.error('Your signed-in account could not be verified. Refresh and try again.');
     setIsSubmitting(true);
     try {
-      const { error: statusError } = await supabase
-        .from('shipments')
-        .update({ current_status: 'Booked' })
-        .eq('id', shipment.id);
+      const { error: statusError } = await supabase.rpc('apply_shipment_status_with_timeline', {
+        p_shipment_id: shipment.id,
+        p_status: 'Booked',
+        p_status_notes: 'Freight space secured.',
+      });
       if (statusError) throw statusError;
-
-      const { error: timelineError } = await supabase.from('shipment_timeline').insert([{
-        shipment_id: shipment.id,
-        status_dropdown: 'Booked',
-        status_notes: 'Freight space secured.',
-        updated_by_role: userRole,
-        action_by_name: actionBy,
-      }]);
-      if (timelineError) throw timelineError;
 
       const { error: notificationError } = await supabase.from('notifications').insert([{
         role_target: 'ALL',
@@ -407,7 +439,6 @@ export default function ShipmentDetails() {
       }]);
       if (notificationError) toast.warning('Shipment booked, but the team notification could not be created.');
 
-      setActionBy('');
       await fetchData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to book this shipment.');
@@ -418,28 +449,18 @@ export default function ShipmentDetails() {
   };
 
   const handleUpdateStatus = async (statusToApply = newStatus, notesToApply = statusNotes) => {
-    if (!statusToApply) return alert('Please select a status.');
-    if (!actionBy) return alert('Please enter your name.');
+    if (!statusToApply) return toast.error('Please select a status.');
+    if (!actionBy) return toast.error('Your signed-in account could not be verified. Refresh and try again.');
     setIsSubmitting(true);
     try {
-      const { error: statusError } = await supabase
-        .from('shipments')
-        .update({ current_status: statusToApply })
-        .eq('id', shipment.id);
+      // Status and timeline writes commit together; a failed milestone cannot
+      // leave the shipment status changed without its audit trail.
+      const { error: statusError } = await supabase.rpc('apply_shipment_status_with_timeline', {
+        p_shipment_id: shipment.id,
+        p_status: statusToApply,
+        p_status_notes: notesToApply,
+      });
       if (statusError) throw statusError;
-
-      const { error: timelineError } = await supabase.from('shipment_timeline').insert([{
-        shipment_id: shipment.id,
-        status_dropdown: statusToApply,
-        status_notes: notesToApply,
-        updated_by_role: userRole,
-        action_by_name: actionBy,
-      }]);
-      if (timelineError) {
-        toast.error('Shipment status changed, but its timeline entry could not be saved. Contact an administrator.');
-        await fetchData();
-        return;
-      }
 
       const { error: notificationError } = await supabase.from('notifications').insert([{
         role_target: 'ALL',
@@ -451,7 +472,6 @@ export default function ShipmentDetails() {
 
       setNewStatus('');
       setStatusNotes('');
-      setActionBy('');
       await fetchData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to update shipment status.');
@@ -474,8 +494,26 @@ export default function ShipmentDetails() {
       setComments(prev => prev.map(c => c.id === tempId ? data : c));
     } catch (error) {
       setComments(prev => prev.filter(c => c.id !== tempId));
-      queueAction('shipment_comments', 'INSERT', { shipment_id: shipment.id, comment_text: savedComment, updated_by_role: userRole, action_by_name: savedCommentBy });
-      toast.warning("Offline: Comment saved locally.");
+      const isConnectivityFailure = !navigator.onLine
+        || error instanceof TypeError
+        || (error instanceof Error && error.message === 'Offline');
+
+      if (!isConnectivityFailure) {
+        toast.error(error instanceof Error ? `Comment could not be saved: ${error.message}` : 'Comment could not be saved.');
+        return;
+      }
+
+      try {
+        await queueAction('shipment_comments', 'INSERT', {
+          shipment_id: shipment.id,
+          comment_text: savedComment,
+          updated_by_role: userRole,
+          action_by_name: savedCommentBy,
+        });
+        toast.warning('Comment saved on this device and will sync when this account reconnects.');
+      } catch (queueError) {
+        toast.error(queueError instanceof Error ? queueError.message : 'Could not save the comment offline.');
+      }
     }
   };
 
@@ -497,70 +535,69 @@ export default function ShipmentDetails() {
   };
 
   const handleSaveEdit = async () => {
+    const weight = Number(editFormData.weight);
+    const agreedAmount = editFormData.agreed_amount === '' || editFormData.agreed_amount == null
+      ? null
+      : Number(editFormData.agreed_amount);
+    const rate = editFormData.rate === '' || editFormData.rate == null
+      ? null
+      : Number(editFormData.rate);
+
+    if (!Number.isFinite(weight) || weight <= 0) {
+      toast.error('Enter a valid shipment weight greater than zero.');
+      return;
+    }
+    if (agreedAmount !== null && (!Number.isFinite(agreedAmount) || agreedAmount < 0)) {
+      toast.error('Enter a valid agreed amount.');
+      return;
+    }
+    if (rate !== null && (!Number.isFinite(rate) || rate < 0)) {
+      toast.error('Enter a valid shipment rate.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const { error: updateError } = await supabase.from('shipments').update({
-        sender_details: editFormData.sender_details,
-        receiver_details: editFormData.receiver_details,
-        weight: parseFloat(editFormData.weight),
-        dimensions: editFormData.dimensions,
-        origin: editFormData.origin,
-        destination: editFormData.destination,
-        commodity_type: editFormData.commodity_type,
-        shipment_type: editFormData.shipment_type,
-        service_type: editFormData.service_type,
-        agreed_amount: editFormData.agreed_amount ? parseFloat(editFormData.agreed_amount) : null,
-        rate: editFormData.rate ? parseFloat(editFormData.rate) : null,
-        currency: editFormData.currency,
-        expected_delivery_date: editFormData.expected_delivery_date || null,
-        payment_due_date: editFormData.payment_due_date || null,
-      }).eq('id', shipment.id);
+      // The shipment update and its audit timeline entry commit together.
+      const { error: updateError } = await supabase.rpc('update_shipment_details_with_timeline', {
+        p_shipment_id: shipment.id,
+        p_sender_details: editFormData.sender_details,
+        p_receiver_details: editFormData.receiver_details,
+        p_weight: weight,
+        p_dimensions: editFormData.dimensions,
+        p_origin: editFormData.origin,
+        p_destination: editFormData.destination,
+        p_commodity_type: editFormData.commodity_type,
+        p_shipment_type: editFormData.shipment_type,
+        p_service_type: editFormData.service_type,
+        p_agreed_amount: agreedAmount,
+        p_rate: rate,
+        p_currency: editFormData.currency || 'NGN',
+        p_expected_delivery_date: editFormData.expected_delivery_date || null,
+        p_payment_due_date: editFormData.payment_due_date || null,
+      });
       if (updateError) throw updateError;
 
-      const { error: timelineError } = await supabase.from('shipment_timeline').insert([{
-        shipment_id: shipment.id,
-        status_dropdown: 'Details Edited',
-        status_notes: 'Shipment info corrected.',
-        updated_by_role: userRole,
-        action_by_name: actionBy || userRole,
-      }]);
-      if (timelineError) toast.warning('Shipment details saved, but the timeline entry could not be created.');
-
+      toast.success('Shipment details and audit history updated.');
       setIsEditing(false);
       await fetchData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to save shipment changes.');
+      await fetchData();
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleApprovePayment = async () => {
-    if (!actionBy) return alert('Please enter your name.');
+    if (!actionBy) return toast.error('Your signed-in account could not be verified. Refresh and try again.');
     setIsSubmitting(true);
     try {
-      const { data: updatedShipment, error: approvalError } = await supabase
-        .from('shipments')
-        .update({ payment_status: 'Approved' })
-        .eq('id', shipment.id)
-        .eq('payment_status', 'Pending')
-        .select('id')
-        .maybeSingle();
+      // Approval and its finance timeline event are one atomic database action.
+      const { error: approvalError } = await supabase.rpc('approve_shipment_payment_with_timeline', {
+        p_shipment_id: shipment.id,
+      });
       if (approvalError) throw approvalError;
-      if (!updatedShipment) throw new Error('Payment was already approved or the shipment could not be updated.');
-
-      const { error: timelineError } = await supabase.from('shipment_timeline').insert([{
-        shipment_id: shipment.id,
-        status_dropdown: 'Finance Approved',
-        status_notes: 'Payment confirmed.',
-        updated_by_role: userRole,
-        action_by_name: actionBy,
-      }]);
-      if (timelineError) {
-        toast.error('Payment was approved, but its timeline entry could not be saved. Contact an administrator.');
-        await fetchData();
-        return;
-      }
 
       const messages = [
         {
@@ -579,7 +616,6 @@ export default function ShipmentDetails() {
       const { error: notificationError } = await supabase.from('notifications').insert(messages);
       if (notificationError) toast.warning('Payment approved, but team notifications could not be created.');
 
-      setActionBy('');
       await fetchData();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to approve payment.');
@@ -589,8 +625,18 @@ export default function ShipmentDetails() {
     }
   };
 
-  if (loading) return <div className="p-10 text-center text-slate-500 animate-pulse">Loading...</div>;
-  if (!shipment) return <div className="p-10 text-center text-red-500 font-bold">Shipment not found.</div>;
+  if (loading) return <div className="mx-auto max-w-5xl p-10 text-center text-sm font-medium text-slate-500" role="status">Loading shipment workspace…</div>;
+  if (loadError) return (
+    <div className="mx-auto max-w-xl rounded-2xl border border-rose-200 bg-white p-8 text-center shadow-sm">
+      <p className="font-semibold text-slate-900">We couldn&apos;t load this shipment.</p>
+      <p className="mt-2 text-sm text-slate-500">It may not exist, or the connection may have been interrupted. Your records have not been changed.</p>
+      <div className="mt-5 flex justify-center gap-3">
+        <button type="button" onClick={() => router.push('/dashboard/shipments')} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Back to shipments</button>
+        <button type="button" onClick={() => void fetchData()} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Try again</button>
+      </div>
+    </div>
+  );
+  if (!shipment) return <div className="p-10 text-center text-slate-500">Shipment details are unavailable.</div>;
 
   const canEditOrDelete = userRole === 'Super Admin' || userRole === 'Customer Service';
   const canSeeFinancials = userRole === 'Super Admin' || userRole === 'Customer Service' || userRole === 'Finance' || userRole === 'Freight';
@@ -607,26 +653,26 @@ export default function ShipmentDetails() {
       )}
 
       {/* HEADER */}
-      <div className="flex justify-between items-center mb-2">
+      <div className="mb-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/shipments" className="text-slate-400 hover:text-slate-800 transition-colors p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft size={20} /></Link>
           <h1 className="text-sm font-semibold text-slate-500 uppercase tracking-widest hidden md:block">Back to Shipments</h1>
         </div>
-        <div className="flex gap-2">
-          <button onClick={generatePDF} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-md font-medium text-sm">
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" onClick={generatePDF} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-xl hover:bg-slate-900 transition-colors shadow-md font-medium text-sm">
             <Download size={16} /> Download Manifest
           </button>
           {canEditOrDelete && (
             <>
               {!isEditing ? (
                 <>
-                  <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"><Edit size={16} /> Edit</button>
-                  <button onClick={handleDelete} disabled={isSubmitting} className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 px-4 py-2 rounded-xl hover:bg-red-100 transition-colors shadow-sm font-medium text-sm"><Trash2 size={16} /> Delete</button>
+                  <button type="button" onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"><Edit size={16} /> Edit</button>
+                  <button type="button" onClick={handleDelete} disabled={isSubmitting} className="flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 px-4 py-2 rounded-xl hover:bg-red-100 transition-colors shadow-sm font-medium text-sm"><Trash2 size={16} /> Delete</button>
                 </>
               ) : (
                 <>
-                  <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"><X size={16} /> Cancel</button>
-                  <button onClick={handleSaveEdit} disabled={isSubmitting} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-600/20 font-medium text-sm"><Save size={16} /> Save</button>
+                  <button type="button" onClick={() => setIsEditing(false)} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2 rounded-xl hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm"><X size={16} /> Cancel</button>
+                  <button type="button" onClick={handleSaveEdit} disabled={isSubmitting} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-600/20 font-medium text-sm"><Save size={16} /> Save</button>
                 </>
               )}
             </>
@@ -671,18 +717,18 @@ export default function ShipmentDetails() {
                   <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Service Type</label><select name="service_type" value={editFormData.service_type || 'DDP'} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white"><option value="DDP">DDP</option><option value="DAP">DAP</option><option value="D2P">D2P</option><option value="FOB">FOB</option><option value="EXW">EXW</option><option value="AFW">AFW</option></select></div>
                   {canSeeFinancials && (
                     <>
-                      <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Rate</label><input type="number" step="0.01" name="rate" value={editFormData.rate || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
-                      <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Agreed Amount</label><div className="flex gap-2"><select name="currency" value={editFormData.currency || 'NGN'} onChange={handleEditChange} className="w-24 border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white font-semibold"><option value="NGN">NGN</option><option value="USD">USD</option></select><input type="number" step="0.01" name="agreed_amount" value={editFormData.agreed_amount || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div></div>
+                      <div><label htmlFor="shipment-edit-rate" className="text-xs font-bold text-slate-500 uppercase block mb-2">Rate</label><input id="shipment-edit-rate" type="number" step="0.01" name="rate" value={editFormData.rate || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
+                      <div><label htmlFor="shipment-edit-agreed-amount" className="text-xs font-bold text-slate-500 uppercase block mb-2">Agreed Amount</label><div className="flex gap-2"><select id="shipment-edit-currency" aria-label="Shipment currency" name="currency" value={editFormData.currency || 'NGN'} onChange={handleEditChange} className="w-24 border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white font-semibold"><option value="NGN">NGN</option><option value="USD">USD</option></select><input id="shipment-edit-agreed-amount" type="number" step="0.01" name="agreed_amount" value={editFormData.agreed_amount || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div></div>
                     </>
                   )}
-                  <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Expected Delivery Date</label><input type="date" name="expected_delivery_date" value={editFormData.expected_delivery_date || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white" /></div>
-                  <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Payment Due Date</label><input type="date" name="payment_due_date" value={editFormData.payment_due_date || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white" /></div>
-                  <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Commodity</label><input name="commodity_type" value={editFormData.commodity_type || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
-                  <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Sender</label><input name="sender_details" value={editFormData.sender_details || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
-                  <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Receiver</label><input name="receiver_details" value={editFormData.receiver_details || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
-                  <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Origin</label><input name="origin" value={editFormData.origin || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
-                  <div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Destination</label><input name="destination" value={editFormData.destination || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
-                  <div className="grid grid-cols-2 gap-4"><div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Weight</label><input type="number" step="0.01" name="weight" value={editFormData.weight || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div><div><label className="text-xs font-bold text-slate-500 uppercase block mb-2">Dims</label><input name="dimensions" value={editFormData.dimensions || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div></div>
+                  <div><label htmlFor="shipment-edit-expected-delivery" className="text-xs font-bold text-slate-500 uppercase block mb-2">Expected Delivery Date</label><input id="shipment-edit-expected-delivery" type="date" name="expected_delivery_date" value={editFormData.expected_delivery_date || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white" /></div>
+                  <div><label htmlFor="shipment-edit-payment-due" className="text-xs font-bold text-slate-500 uppercase block mb-2">Payment Due Date</label><input id="shipment-edit-payment-due" type="date" name="payment_due_date" value={editFormData.payment_due_date || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900 bg-white" /></div>
+                  <div><label htmlFor="shipment-edit-commodity" className="text-xs font-bold text-slate-500 uppercase block mb-2">Commodity</label><input id="shipment-edit-commodity" name="commodity_type" value={editFormData.commodity_type || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
+                  <div><label htmlFor="shipment-edit-sender" className="text-xs font-bold text-slate-500 uppercase block mb-2">Sender</label><input id="shipment-edit-sender" name="sender_details" value={editFormData.sender_details || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
+                  <div><label htmlFor="shipment-edit-receiver" className="text-xs font-bold text-slate-500 uppercase block mb-2">Receiver</label><input id="shipment-edit-receiver" name="receiver_details" value={editFormData.receiver_details || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
+                  <div><label htmlFor="shipment-edit-origin" className="text-xs font-bold text-slate-500 uppercase block mb-2">Origin</label><input id="shipment-edit-origin" name="origin" value={editFormData.origin || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
+                  <div><label htmlFor="shipment-edit-destination" className="text-xs font-bold text-slate-500 uppercase block mb-2">Destination</label><input id="shipment-edit-destination" name="destination" value={editFormData.destination || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div>
+                  <div className="grid grid-cols-2 gap-4"><div><label htmlFor="shipment-edit-weight" className="text-xs font-bold text-slate-500 uppercase block mb-2">Weight</label><input id="shipment-edit-weight" type="number" step="0.01" name="weight" value={editFormData.weight || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div><div><label htmlFor="shipment-edit-dimensions" className="text-xs font-bold text-slate-500 uppercase block mb-2">Dims</label><input id="shipment-edit-dimensions" name="dimensions" value={editFormData.dimensions || ''} onChange={handleEditChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-slate-900" /></div></div>
                 </>
               ) : (
                 <>
@@ -692,9 +738,9 @@ export default function ShipmentDetails() {
                   <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Destination</span> <span className="text-slate-900 font-semibold">{shipment.destination}</span></div>
                   <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Commodity</span> <span className="text-slate-900 font-semibold">{shipment.commodity_type}</span></div>
                   <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Weight / Dims</span> <span className="text-slate-900 font-semibold">{shipment.weight} kg / {shipment.dimensions}</span></div>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Expected Delivery</span> <span className="text-slate-900 font-semibold">{shipment.expected_delivery_date ? new Date(`${shipment.expected_delivery_date}T00:00:00`).toLocaleDateString('en-GB') : 'Not set'}</span></div>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Payment Due</span> <span className="text-slate-900 font-semibold">{shipment.payment_due_date ? new Date(`${shipment.payment_due_date}T00:00:00`).toLocaleDateString('en-GB') : 'Not set'}</span></div>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Delivered At</span> <span className="text-slate-900 font-semibold">{shipment.delivered_at ? new Date(shipment.delivered_at).toLocaleString('en-GB') : 'Not recorded'}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Expected Delivery</span> <span className="text-slate-900 font-semibold">{shipment.expected_delivery_date ? new Date(`${shipment.expected_delivery_date}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' }) : 'Not set'}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Payment Due</span> <span className="text-slate-900 font-semibold">{shipment.payment_due_date ? new Date(`${shipment.payment_due_date}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' }) : 'Not set'}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Delivered At</span> <span className="text-slate-900 font-semibold">{shipment.delivered_at ? new Date(shipment.delivered_at).toLocaleString('en-GB', { timeZone: 'Africa/Lagos' }) : 'Not recorded'}</span></div>
                   
                   {canSeeFinancials && (
                     <div className="md:col-span-2 grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mt-2">
@@ -710,16 +756,16 @@ export default function ShipmentDetails() {
           {/* FINANCIAL LEDGER */}
           {canSeeFinancials && !isEditing && (
             <div className="bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
-              <div className="flex justify-between items-center mb-4 border-b border-slate-100 pb-4">
+              <div className="mb-4 flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
                 <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2"><DollarSign size={20} className="text-emerald-500"/> Financial Ledger</h2>
                 {canRecordPayment && (
-                  <button onClick={() => setShowPaymentModal(true)} className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-md">
+                  <button type="button" onClick={() => setShowPaymentModal(true)} className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-emerald-700 transition-all shadow-md">
                     <Plus size={16} /> Record Payment
                   </button>
                 )}
               </div>
               
-              <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <p className="text-xs font-bold text-slate-500 uppercase mb-1">Agreed Amount</p>
                   <p className="text-lg font-extrabold text-slate-900">{shipment.currency} {agreedAmount.toLocaleString()}</p>
@@ -738,13 +784,13 @@ export default function ShipmentDetails() {
               <div className="space-y-2">
                 {payments.length === 0 && <p className="text-sm text-slate-500 italic">No payments recorded yet.</p>}
                 {payments.map(p => (
-                  <div key={p.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <div key={p.id} className="flex flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <p className="text-sm font-bold text-slate-900">{p.currency} {parseFloat(p.amount).toLocaleString()}</p>
                       <p className="text-xs text-slate-500">{p.payment_method} • Ref: {p.reference || 'N/A'}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs font-bold text-slate-600">{new Date(p.created_at).toLocaleDateString()}</p>
+                      <p className="text-xs font-bold text-slate-600">{new Date(p.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' })}</p>
                       <p className="text-xs text-slate-400">By: {p.recorded_by}</p>
                     </div>
                   </div>
@@ -759,14 +805,14 @@ export default function ShipmentDetails() {
                 <h2 className="text-lg font-bold text-slate-900 mb-4">Action Panel</h2>
                 
                 <div className="mb-6">
-                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Action By (Your Name) *</label>
-                  <input type="text" placeholder="e.g. John Doe" value={actionBy} onChange={e => setActionBy(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm" />
+                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Action by (authenticated account)</label>
+                  <input type="email" readOnly aria-label="Action attributed to authenticated account" value={actionBy} className="w-full border border-slate-200 p-3 rounded-xl text-slate-600 bg-slate-100 font-medium shadow-sm" />
                 </div>
 
                 {shipment.payment_status === 'Pending' && (userRole === 'Finance' || userRole === 'Super Admin') && (
                   <div className="mb-6 p-4 bg-white border border-amber-200 rounded-xl shadow-sm">
                     <p className="text-amber-700 font-bold mb-3 flex items-center gap-2"><Clock size={18}/> Awaiting Finance Approval</p>
-                    <button onClick={handleApprovePayment} disabled={isSubmitting} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-emerald-700 flex items-center gap-2 transition-all shadow-md">
+                    <button type="button" onClick={handleApprovePayment} disabled={isSubmitting} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-emerald-700 flex items-center gap-2 transition-all shadow-md">
                       <CheckCircle size={18} /> {isSubmitting ? 'Processing...' : 'Approve Payment'}
                     </button>
                   </div>
@@ -775,7 +821,7 @@ export default function ShipmentDetails() {
                 {shipment.payment_status === 'Approved' && shipment.current_status === 'Registered' && (userRole === 'Freight' || userRole === 'Super Admin') && (
                   <div className="mb-6 p-4 bg-white border border-blue-200 rounded-xl shadow-sm">
                     <p className="text-blue-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Awaiting Freight Booking</p>
-                    <button onClick={handleFreightBooked} disabled={isSubmitting} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-blue-700 flex items-center gap-2 transition-all shadow-md">
+                    <button type="button" onClick={handleFreightBooked} disabled={isSubmitting} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-blue-700 flex items-center gap-2 transition-all shadow-md">
                       <CheckCircle size={18} /> {isSubmitting ? 'Processing...' : 'Mark as Booked'}
                     </button>
                   </div>
@@ -786,7 +832,7 @@ export default function ShipmentDetails() {
                   <div className="mb-6 p-4 bg-white border border-blue-200 rounded-xl shadow-sm">
                     <p className="text-blue-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Shipment Ready for Pickup</p>
                     <div className="flex flex-col gap-2">
-                       <button onClick={() => handleUpdateStatus('Picked Up', 'Picked up by RFS')} disabled={isSubmitting} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700 w-full">Confirm Pickup</button>
+                       <button type="button" onClick={() => handleUpdateStatus('Picked Up', 'Picked up by RFS')} disabled={isSubmitting} className="bg-blue-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-blue-700 w-full">Confirm Pickup</button>
                     </div>
                   </div>
                 )}
@@ -796,8 +842,8 @@ export default function ShipmentDetails() {
                     <p className="text-purple-700 font-bold mb-3 flex items-center gap-2"><Anchor size={18}/> Routing Decision</p>
                     <p className="text-xs text-slate-500 mb-3">Did you deliver this locally or are you handing it to Operations for export?</p>
                     <div className="flex gap-2">
-                      <button onClick={() => handleUpdateStatus('Delivered', 'Delivered locally by RFS')} disabled={isSubmitting} className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-700 w-1/2">Delivered (Local)</button>
-                      <button onClick={() => handleUpdateStatus('Handed to Ops', 'Handed to Ops for export')} disabled={isSubmitting} className="bg-purple-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-purple-700 w-1/2">Handover to Ops</button>
+                      <button type="button" onClick={() => handleUpdateStatus('Delivered', 'Delivered locally by RFS')} disabled={isSubmitting} className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-emerald-700 w-1/2">Delivered (Local)</button>
+                      <button type="button" onClick={() => handleUpdateStatus('Handed to Ops', 'Handed to Ops for export')} disabled={isSubmitting} className="bg-purple-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-purple-700 w-1/2">Handover to Ops</button>
                     </div>
                   </div>
                 )}
@@ -808,9 +854,9 @@ export default function ShipmentDetails() {
                     <p className="text-amber-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Operations Processing</p>
                     <div className="flex flex-col gap-2">
                       {shipment.current_status === 'Handed to Ops' && (
-                        <button onClick={() => handleUpdateStatus('Export Cleared', 'Customs/Export formalities cleared')} disabled={isSubmitting} className="bg-amber-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-amber-700 w-full">Mark Export Cleared</button>
+                        <button type="button" onClick={() => handleUpdateStatus('Export Cleared', 'Customs/Export formalities cleared')} disabled={isSubmitting} className="bg-amber-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-amber-700 w-full">Mark Export Cleared</button>
                       )}
-                      <button onClick={() => handleUpdateStatus('Handed to Airline', 'Handed over to Airline')} disabled={isSubmitting} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-indigo-700 w-full">Handover to Airline</button>
+                      <button type="button" onClick={() => handleUpdateStatus('Handed to Airline', 'Handed over to Airline')} disabled={isSubmitting} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-indigo-700 w-full">Handover to Airline</button>
                     </div>
                   </div>
                 )}
@@ -833,10 +879,10 @@ export default function ShipmentDetails() {
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Additional Notes</label>
-                      <input type="text" placeholder="Optional details..." value={statusNotes} onChange={e => setStatusNotes(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm" />
+                      <input type="text" aria-label="Optional shipment status notes" placeholder="Optional details..." value={statusNotes} onChange={e => setStatusNotes(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm" />
                     </div>
                     <div className="md:col-span-2">
-                      <button onClick={() => handleUpdateStatus()} disabled={isSubmitting} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md">
+                      <button type="button" onClick={() => handleUpdateStatus()} disabled={isSubmitting} className="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-slate-800 transition-all shadow-md">
                         {isSubmitting ? 'Updating...' : 'Force Update Status'}
                       </button>
                     </div>
@@ -864,7 +910,7 @@ export default function ShipmentDetails() {
                         <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg"><FileText size={20} /></div>
                         <div>
                           <p className="text-sm font-bold text-slate-800 group-hover:text-indigo-700">{doc.file_name}</p>
-                          <p className="text-xs text-slate-500">Uploaded by {doc.uploaded_by} on {new Date(doc.created_at).toLocaleDateString()}</p>
+                          <p className="text-xs text-slate-500">Uploaded by {doc.uploaded_by} on {new Date(doc.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' })}</p>
                         </div>
                       </div>
                       <span className="text-xs font-semibold text-indigo-600">Open</span>
@@ -884,7 +930,7 @@ export default function ShipmentDetails() {
                 <div key={item.id || i} className={`relative flex items-center justify-between md:justify-normal group is-active ${item.isOptimistic ? 'opacity-60' : ''}`}>
                   <div className={`flex items-center justify-center w-8 h-8 rounded-full border-4 border-white text-white shadow shrink-0 z-10 text-xs ${item.isOptimistic ? 'bg-slate-400' : 'bg-indigo-500'}`}>{item.isOptimistic ? '...' : '✓'}</div>
                   <div className="w-[calc(100%-3rem)] bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm ml-4">
-                    <div className="flex items-center justify-between space-x-2 mb-1"><div className="font-bold text-slate-900 text-sm">{item.status_dropdown}</div><time className="text-[10px] font-semibold text-slate-400 uppercase">{new Date(item.created_at).toLocaleDateString()}</time></div>
+                    <div className="flex items-center justify-between space-x-2 mb-1"><div className="font-bold text-slate-900 text-sm">{item.status_dropdown}</div><time className="text-[10px] font-semibold text-slate-400 uppercase">{new Date(item.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' })}</time></div>
                     <div className="text-sm text-slate-600 leading-relaxed">{item.status_notes}</div>
                     <div className="text-xs text-indigo-600 mt-2 font-bold bg-indigo-50 px-2 py-1 rounded-md inline-block">By: {item.action_by_name}</div>
                   </div>
@@ -898,16 +944,16 @@ export default function ShipmentDetails() {
             <div className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
               {comments.map((c, i) => (
                 <div key={c.id || i} className={`bg-slate-50 p-4 rounded-xl border border-slate-100 ${c.isOptimistic ? 'opacity-60' : ''}`}>
-                  <div className="flex justify-between items-center mb-2"><span className="font-bold text-slate-800 text-sm">{c.action_by_name}</span><span className="text-[10px] font-bold text-slate-400 uppercase">{c.isOptimistic ? 'Sending...' : new Date(c.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span></div>
+                  <div className="flex justify-between items-center mb-2"><span className="font-bold text-slate-800 text-sm">{c.action_by_name}</span><span className="text-[10px] font-bold text-slate-400 uppercase">{c.isOptimistic ? 'Sending...' : new Date(c.created_at).toLocaleTimeString('en-GB', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit' })}</span></div>
                   <p className="text-sm text-slate-700 leading-relaxed">{c.comment_text}</p>
                 </div>
               ))}
             </div>
             <form onSubmit={handleAddComment} className="mt-auto space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
-              <input type="text" placeholder="Your Name..." value={commentBy} onChange={e => setCommentBy(e.target.value)} className="w-full border border-slate-200 p-2 rounded-lg text-slate-900 bg-white text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" required />
+              <label htmlFor="shipment-comment-author" className="sr-only">Comment posted under</label><input id="shipment-comment-author" type="text" value={commentBy} readOnly aria-label="Comment posted under authenticated account" className="w-full rounded-lg border border-slate-200 bg-slate-100 p-2 text-sm text-slate-600" />
               <div className="flex gap-2">
                 <input type="text" placeholder="Type a comment..." value={newComment} onChange={e => setNewComment(e.target.value)} className="w-full border border-slate-200 p-2 rounded-lg text-slate-900 bg-white text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500" required />
-                <button type="submit" className="bg-slate-900 text-white p-2 rounded-lg hover:bg-slate-800 transition-colors shadow-sm"><Send size={18} /></button>
+                <button type="submit" aria-label="Send shipment comment" disabled={isSubmitting} className="rounded-lg bg-slate-900 p-2 text-white shadow-sm transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"><Send size={18} /></button>
               </div>
             </form>
           </div>
@@ -916,20 +962,20 @@ export default function ShipmentDetails() {
 
       {/* RECORD PAYMENT MODAL */}
       {showPaymentModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/50 p-4 backdrop-blur-sm">
+          <div role="dialog" aria-modal="true" aria-labelledby="record-payment-title" className="my-auto w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h3 className="font-bold text-slate-800">Record Payment</h3>
-              <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+              <h3 id="record-payment-title" className="font-bold text-slate-800">Record Payment</h3>
+              <button type="button" aria-label="Close payment dialog" onClick={() => setShowPaymentModal(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"><X size={20}/></button>
             </div>
             <form onSubmit={handleRecordPayment} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Amount Paid ({shipment.currency})</label>
-                <input type="number" step="0.01" required value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 font-bold" placeholder={`Max: ${balance}`} />
+                <label htmlFor="payment-amount" className="block text-xs font-bold text-slate-500 uppercase mb-1">Amount Paid ({shipment.currency})</label>
+                <input id="payment-amount" type="number" min="0.01" max={agreedAmount > 0 ? Math.max(balance, 0) : undefined} step="0.01" required value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 font-bold" placeholder={`Max: ${balance}`} />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Payment Method</label>
-                <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 bg-white">
+                <label htmlFor="payment-method" className="block text-xs font-bold text-slate-500 uppercase mb-1">Payment Method</label>
+                <select id="payment-method" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 bg-white">
                   <option value="Bank Transfer">Bank Transfer</option>
                   <option value="Cash">Cash</option>
                   <option value="Cheque">Cheque</option>
@@ -937,12 +983,12 @@ export default function ShipmentDetails() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Transaction Reference</label>
-                <input type="text" value={paymentRef} onChange={e => setPaymentRef(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="Optional e.g. GTB-12345" />
+                <label htmlFor="payment-reference" className="block text-xs font-bold text-slate-500 uppercase mb-1">Transaction Reference</label>
+                <input id="payment-reference" type="text" maxLength={255} value={paymentRef} onChange={e => setPaymentRef(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="Optional e.g. GTB-12345" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Recorded By (Your Name)</label>
-                <input type="text" required value={actionBy} onChange={e => setActionBy(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="e.g. Jane Doe" />
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Recorded By (authenticated account)</label>
+                <input type="email" readOnly required value={actionBy} aria-label="Payment attributed to authenticated account" className="w-full border border-slate-200 bg-slate-100 p-2.5 rounded-xl text-sm text-slate-600" />
               </div>
               <button type="submit" disabled={isSubmitting} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition-all flex justify-center items-center gap-2 mt-2">
                 {isSubmitting ? 'Processing...' : 'Record Payment'}

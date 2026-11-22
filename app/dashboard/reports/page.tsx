@@ -40,10 +40,12 @@ type ReportData = {
 };
 
 function localDate(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Lagos',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
 }
 
 function currencyAmount(amount: number, currency: string) {
@@ -79,12 +81,14 @@ function MetricCard({
 
 export default function OperationsReportsPage() {
   const today = new Date();
-  const initialStart = new Date();
-  initialStart.setDate(initialStart.getDate() - 29);
+  const endDateDefault = localDate(today);
+  const initialStart = new Date(`${endDateDefault}T00:00:00Z`);
+  initialStart.setUTCDate(initialStart.getUTCDate() - 29);
+  const startDateDefault = initialStart.toISOString().slice(0, 10);
 
-  const [startDate, setStartDate] = useState(() => localDate(initialStart));
-  const [endDate, setEndDate] = useState(() => localDate(today));
-  const [appliedRange, setAppliedRange] = useState({ start: localDate(initialStart), end: localDate(today) });
+  const [startDate, setStartDate] = useState(startDateDefault);
+  const [endDate, setEndDate] = useState(endDateDefault);
+  const [appliedRange, setAppliedRange] = useState({ start: startDateDefault, end: endDateDefault });
   const [report, setReport] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -125,8 +129,8 @@ export default function OperationsReportsPage() {
       toast.error('Choose a valid start and end date.');
       return;
     }
-    const start = new Date(`${startDate}T00:00:00`);
-    const end = new Date(`${endDate}T00:00:00`);
+    const start = new Date(`${startDate}T00:00:00Z`);
+    const end = new Date(`${endDate}T00:00:00Z`);
     const days = Math.floor((end.getTime() - start.getTime()) / 86400000);
     if (days > 365) {
       toast.error('Choose a reporting period of no more than 366 days.');
@@ -191,11 +195,11 @@ export default function OperationsReportsPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
             <label className="block">
               <span className="mb-1.5 block text-xs font-semibold text-slate-500">From</span>
-              <input type="date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 sm:w-44" />
+              <input type="date" aria-label="Report start date" value={startDate} max={endDate || undefined} onChange={(event) => setStartDate(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 sm:w-44" />
             </label>
             <label className="block">
               <span className="mb-1.5 block text-xs font-semibold text-slate-500">To</span>
-              <input type="date" value={endDate} min={startDate || undefined} max={localDate(today)} onChange={(event) => setEndDate(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 sm:w-44" />
+              <input type="date" aria-label="Report end date" value={endDate} min={startDate || undefined} max={localDate(today)} onChange={(event) => setEndDate(event.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 sm:w-44" />
             </label>
             <button onClick={handleApply} disabled={loading} className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-50">Update report</button>
           </div>
@@ -211,7 +215,7 @@ export default function OperationsReportsPage() {
 
       {!loading && loadError && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-8 text-center">
-          <p className="font-semibold text-rose-900">We couldn't load this report.</p>
+          <p className="font-semibold text-rose-900">We couldn&apos;t load this report.</p>
           <p className="mt-1 text-sm text-rose-700">Check that you have Finance or Super Admin access and try again.</p>
           <button onClick={loadReport} className="mt-4 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-rose-700 shadow-sm ring-1 ring-rose-200">Try again</button>
         </div>
@@ -280,7 +284,7 @@ export default function OperationsReportsPage() {
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
               <div className="mb-5"><h2 className="font-bold text-slate-900">Monthly shipment volume</h2><p className="mt-1 text-xs text-slate-500">Shipments created each month within the selected period.</p></div>
               {report.monthly_volume.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">No shipment activity in this period.</p> : <div className="space-y-4">{report.monthly_volume.map((item) => {
-                const label = new Date(`${item.period}T00:00:00`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+                const label = new Date(`${item.period}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos', month: 'short', year: 'numeric' });
                 const percent = (item.count / maxMonthly) * 100;
                 return <div key={item.period}><div className="mb-1.5 flex items-center justify-between text-sm"><span className="font-medium text-slate-600">{label}</span><span className="font-semibold tabular-nums text-slate-900">{item.count}</span></div><div className="h-3 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-indigo-500" style={{ width: `${percent}%` }} /></div></div>;
               })}</div>}

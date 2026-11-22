@@ -52,7 +52,7 @@ export default function CompanySettings() {
             }
           }
 
-          setCompany({ ...compData, logo_url: displayLogo });
+          setCompany({ ...compData, logo_url: displayLogo, logo_path: compData.logo_url?.startsWith('http') ? null : compData.logo_url || null });
           setFormData({
             name: compData.name || '',
             email: compData.email || '',
@@ -119,22 +119,43 @@ export default function CompanySettings() {
     }
 
     setUploading(true);
+    let uploadedPath: string | null = null;
     try {
       const fileExt = file.type === 'image/png' ? 'png' : 'jpg';
-      const filePath = `${company.id}/logo-${Date.now()}.${fileExt}`;
-      
+      const filePath = `${company.id}/company-logo/logo-${crypto.randomUUID()}.${fileExt}`;
+      uploadedPath = filePath;
+
       const { error: uploadError } = await supabase.storage.from('shipment-documents').upload(filePath, file);
       if (uploadError) throw uploadError;
 
-      const { error: updateError } = await supabase.from('companies').update({ logo_url: filePath }).eq('id', company.id);
+      const { data: signedData, error: signedUrlError } = await supabase.storage
+        .from('shipment-documents')
+        .createSignedUrl(filePath, 3600);
+      if (signedUrlError || !signedData?.signedUrl) {
+        throw signedUrlError || new Error('The new logo could not be previewed securely.');
+      }
+
+      const { error: updateError } = await supabase
+        .from('companies')
+        .update({ logo_url: filePath })
+        .eq('id', company.id);
       if (updateError) throw updateError;
 
-      const { data: signedData } = await supabase.storage.from('shipment-documents').createSignedUrl(filePath, 3600);
-      
-      setCompany({ ...company, logo_url: signedData?.signedUrl || '' });
-      toast.success("Logo updated successfully!");
-    } catch (error: any) {
-      toast.error("Error uploading logo: " + error.message);
+      const previousPath = typeof company.logo_path === 'string' ? company.logo_path : null;
+      setCompany({ ...company, logo_url: signedData.signedUrl, logo_path: filePath });
+      uploadedPath = null;
+      toast.success('Company logo updated successfully.');
+
+      if (previousPath && previousPath !== filePath && !previousPath.startsWith('http')) {
+        const { error: cleanupError } = await supabase.storage.from('shipment-documents').remove([previousPath]);
+        if (cleanupError) toast.warning('Logo updated, but the previous logo file could not be cleaned up.');
+      }
+    } catch (error: unknown) {
+      if (uploadedPath) {
+        const { error: cleanupError } = await supabase.storage.from('shipment-documents').remove([uploadedPath]);
+        if (cleanupError) console.error('Temporary company logo cleanup failed:', cleanupError);
+      }
+      toast.error(error instanceof Error ? error.message : 'Unable to upload the company logo.');
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -177,22 +198,22 @@ export default function CompanySettings() {
         <div className="md:col-span-2 bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
           <form onSubmit={handleSave} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Company Name</label>
-              <input type="text" name="name" value={formData.name} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 font-medium" required />
+              <label htmlFor="company-name" className="block text-xs font-bold text-slate-500 uppercase mb-1">Company Name</label>
+              <input type="text" id="company-name" name="name" value={formData.name} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 font-medium" required />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Contact Email</label>
-                <input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="info@company.com" />
+                <label htmlFor="company-email" className="block text-xs font-bold text-slate-500 uppercase mb-1">Contact Email</label>
+                <input type="email" id="company-email" name="email" value={formData.email} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="info@company.com" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Phone Number</label>
-                <input type="text" name="phone" value={formData.phone} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="+234..." />
+                <label htmlFor="company-phone" className="block text-xs font-bold text-slate-500 uppercase mb-1">Phone Number</label>
+                <input type="text" id="company-phone" name="phone" value={formData.phone} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="+234..." />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Office Address</label>
-              <input type="text" name="address" value={formData.address} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="123 Logistics Way, Lagos" />
+              <label htmlFor="company-address" className="block text-xs font-bold text-slate-500 uppercase mb-1">Office Address</label>
+              <input type="text" id="company-address" name="address" value={formData.address} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="123 Logistics Way, Lagos" />
             </div>
             
             <div className="pt-4 border-t border-slate-100">

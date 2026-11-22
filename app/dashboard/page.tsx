@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import {
   Activity, AlertTriangle, ArrowRight, BarChart3, CalendarDays, CheckCircle2, Clock3,
-  Loader2, Package, Plane, RefreshCw, ShieldCheck, Truck, Users,
+  Loader2, Package, Plane, RefreshCw, ShieldCheck, Truck,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -36,10 +36,12 @@ type QueueItem = {
 };
 
 function localDate(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Lagos',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
 }
 
 function StatCard({ label, value, detail, icon: Icon, tint }: {
@@ -182,13 +184,20 @@ export default function Dashboard() {
 
   useEffect(() => {
     void fetchDashboardData();
-    const channel = supabase
-      .channel('dashboard-shipments')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'shipments' }, () => {
-        void fetchDashboardData(true);
-      })
-      .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+
+    // Shipment rows are intentionally excluded from Realtime publication so
+    // column-restricted financial data cannot leak through change payloads.
+    // Refresh periodically instead, and refresh promptly when the tab returns.
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void fetchDashboardData(true);
+    };
+    const interval = window.setInterval(refreshWhenVisible, 120000);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
   }, [fetchDashboardData]);
 
   const maxDaily = useMemo(
@@ -247,7 +256,7 @@ export default function Dashboard() {
           <div className="mb-5 flex items-center justify-between gap-3"><div><h2 className="font-bold text-slate-900">Shipment activity</h2><p className="mt-1 text-xs text-slate-500">New shipments registered each day over the last 30 days.</p></div><BarChart3 size={20} className="text-slate-400" /></div>
           {!overview?.daily_volume.length ? <p className="py-10 text-center text-sm text-slate-400">No shipment activity in this period.</p> : <div className="flex h-48 items-end gap-1.5 overflow-x-auto pb-1">{overview.daily_volume.map((item) => {
             const height = Math.max(5, (item.count / maxDaily) * 100);
-            return <div key={item.day} className="group flex min-w-2 flex-1 flex-col items-center justify-end gap-2" title={`${item.day}: ${item.count} shipments`}><span className="text-[10px] font-semibold text-slate-500 opacity-0 transition group-hover:opacity-100">{item.count}</span><div className="w-full max-w-8 rounded-t-md bg-indigo-500 transition-all group-hover:bg-indigo-600" style={{ height: `${height}%` }} /><span className="text-[9px] text-slate-400">{new Date(`${item.day}T00:00:00`).getDate()}</span></div>;
+            return <div key={item.day} className="group flex min-w-2 flex-1 flex-col items-center justify-end gap-2" title={`${item.day}: ${item.count} shipments`}><span className="text-[10px] font-semibold text-slate-500 opacity-0 transition group-hover:opacity-100">{item.count}</span><div className="w-full max-w-8 rounded-t-md bg-indigo-500 transition-all group-hover:bg-indigo-600" style={{ height: `${height}%` }} /><span className="text-[9px] text-slate-400">{new Date(`${item.day}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos', day: 'numeric' })}</span></div>;
           })}</div>}
           <p className="mt-3 text-[11px] text-slate-400">Daily counts are based on shipment registration date.</p>
         </div>
@@ -284,12 +293,12 @@ export default function Dashboard() {
               <th className="px-5 py-3 text-right text-[11px] font-bold uppercase tracking-wide text-slate-500">Action</th>
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {!queue.length && <tr><td colSpan={5} className="px-5 py-14 text-center"><CheckCircle2 size={30} className="mx-auto text-emerald-500" /><p className="mt-3 font-semibold text-slate-700">You're all caught up</p><p className="mt-1 text-sm text-slate-400">No shipments currently require attention in this queue.</p></td></tr>}
+              {!queue.length && <tr><td colSpan={5} className="px-5 py-14 text-center"><CheckCircle2 size={30} className="mx-auto text-emerald-500" /><p className="mt-3 font-semibold text-slate-700">You&apos;re all caught up</p><p className="mt-1 text-sm text-slate-400">No shipments currently require attention in this queue.</p></td></tr>}
               {queue.map((item) => <tr key={item.id} className="transition-colors hover:bg-slate-50/70">
                 <td className="px-5 py-4"><Link href={`/dashboard/shipments/${encodeURIComponent(item.awb_number.trim())}`} className="font-semibold text-indigo-600 hover:text-indigo-800">{item.awb_number}</Link><p className="mt-1 max-w-56 truncate text-xs text-slate-500">{item.clients?.client_name || 'Unassigned client'}</p></td>
                 <td className="px-5 py-4 text-sm text-slate-600">{item.shipment_type || '—'}</td>
                 <td className="px-5 py-4"><span className="inline-flex rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{item.current_status || 'Unknown'}</span></td>
-                <td className="whitespace-nowrap px-5 py-4 text-xs text-slate-500">{new Date(item.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                <td className="whitespace-nowrap px-5 py-4 text-xs text-slate-500">{new Date(item.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos', day: '2-digit', month: 'short', year: 'numeric' })}</td>
                 <td className="px-5 py-4 text-right"><Link href={`/dashboard/shipments/${encodeURIComponent(item.awb_number.trim())}`} className="inline-flex items-center gap-1 text-sm font-semibold text-slate-500 transition hover:text-indigo-600">Open <ArrowRight size={14} /></Link></td>
               </tr>)}
             </tbody>
@@ -297,7 +306,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <p className="text-xs leading-5 text-slate-400">Live metrics are tenant-scoped by database access policies. Dashboard activity refreshes when shipment records change. Delivery timeliness and overdue receivables will be introduced only after their underlying dates are modelled.</p>
+      <p className="text-xs leading-5 text-slate-400">Live metrics are tenant-scoped and refresh automatically every two minutes while this page is open. SLA and receivables reporting uses expected-delivery and payment-due dates; records without those dates are excluded from the relevant calculations.</p>
     </div>
   );
 }

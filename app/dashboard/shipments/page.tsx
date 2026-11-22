@@ -34,12 +34,21 @@ const STATUS_OPTIONS = [
 
 function deliveryDateLabel(date: string | null, status: string | null) {
   if (!date) return { label: 'Not set', overdue: false };
-  const due = new Date(`${date}T00:00:00`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayLagos = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Lagos',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  const due = new Date(`${date}T00:00:00Z`);
   return {
-    label: due.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-    overdue: status !== 'Delivered' && due < today,
+    label: due.toLocaleDateString('en-GB', {
+      timeZone: 'Africa/Lagos',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }),
+    overdue: status !== 'Delivered' && date < todayLagos,
   };
 }
 
@@ -280,7 +289,7 @@ export default function ShipmentsList() {
                 </td></tr>
               )}
               {!loading && !loadError && shipments.length === 0 && (
-                <tr><td colSpan={8} className="px-6 py-14 text-center">
+                <tr><td colSpan={9} className="px-6 py-14 text-center">
                   <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><Package size={22} /></div>
                   <p className="mt-3 font-semibold text-slate-800">{hasActiveFilters ? 'No matching shipments' : 'No shipments yet'}</p>
                   <p className="mt-1 text-sm text-slate-500">{hasActiveFilters ? 'Try changing or clearing your filters.' : 'New shipment registrations will appear here.'}</p>
@@ -317,7 +326,7 @@ export default function ShipmentsList() {
                     })()}
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-xs text-slate-500">
-                    <span className="inline-flex items-center gap-1.5"><CalendarDays size={13} />{new Date(shipment.created_at).toLocaleDateString()}</span>
+                    <span className="inline-flex items-center gap-1.5"><CalendarDays size={13} />{new Date(shipment.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' })}</span>
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-right">
                     <Link href={`/dashboard/shipments/${encodeURIComponent(shipment.awb_number.trim())}`} className="text-sm font-semibold text-slate-500 transition hover:text-indigo-600">View</Link>

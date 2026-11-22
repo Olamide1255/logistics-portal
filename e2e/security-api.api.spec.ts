@@ -22,3 +22,10 @@ test('company deletion endpoint rejects unauthenticated requests', async ({ requ
 
   expect(response.status()).toBe(401);
 });
+
+
+test('public tracking logo endpoint rejects malformed tracking tokens', async ({ request }) => {
+  const response = await request.get('/api/track/not-a-valid-token/logo');
+
+  expect(response.status()).toBe(404);
+});

@@ -154,7 +154,7 @@ export default function ClientReports() {
           name: client.client_name,
           shipments: client.shipment_count,
           financial_breakdown: financialBreakdown,
-          joined: new Date(client.created_at).toLocaleDateString(),
+          joined: new Date(client.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' }),
         };
       });
 
@@ -312,7 +312,7 @@ export default function ClientReports() {
                       ) : (
                         <>
                           <p className="font-semibold text-slate-900">{client.client_name}</p>
-                          <p className="mt-1 text-xs text-slate-400">Added {new Date(client.created_at).toLocaleDateString()}</p>
+                          <p className="mt-1 text-xs text-slate-400">Added {new Date(client.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' })}</p>
                         </>
                       )}
                     </td>
