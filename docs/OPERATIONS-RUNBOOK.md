@@ -30,7 +30,9 @@ A lightweight GitHub Actions production health check runs every six hours and ca
 ### Free-tier monitoring limitations
 
 - Vercel Hobby retains only one hour of runtime logs and does not include configurable Log Drains. Use the GitHub scheduled health check for basic availability and inspect Vercel logs promptly after an incident.
-- Supabase Free does not include automatic daily database backups. It also does not include Point-in-Time Recovery.
+- Supabase Free does not include automatic daily database backups, Point-in-Time Recovery or Log Drains. Supabase API/database log retention is one day.
+- Supabase Free projects can pause after one week of inactivity and the organization has a limit of two active Free projects. Keep production active and periodically exercise staging so it does not go idle.
+- Monitor Free-plan quotas: 500 MB database per project, 1 GB Storage, 5 GB egress and 500,000 Edge Function invocations. These limits can become launch constraints as tenants and documents grow.
 
 ## Database backup and recovery
 
@@ -40,13 +42,15 @@ A lightweight GitHub Actions production health check runs every six hours and ca
 
 Run from a trusted workstation with the Supabase CLI installed. Obtain the production database connection string from Supabase Dashboard → Project Settings → Database. Do not paste it into chat, commit it, or store it in a public repository.
 
-Use the current Supabase CLI's `supabase db dump --help` to confirm flag compatibility. With CLI versions that support `--remote`, export schema, data and custom roles separately:
+Use the current Supabase CLI's `supabase db dump --help` to confirm flag compatibility. The current Supabase backup guide documents `--db-url`; newer CLI versions may expose the equivalent `--remote` flag. Export schema, data, roles and migration history separately:
 
 ```bash
 mkdir -p backups
-supabase db dump --remote="$SUPABASE_DB_URL" -f "backups/schema-$(date -u +%F).sql"
-supabase db dump --remote="$SUPABASE_DB_URL" -f "backups/data-$(date -u +%F).sql" --use-copy --data-only
-supabase db dump --remote="$SUPABASE_DB_URL" -f "backups/roles-$(date -u +%F).sql" --role-only
+supabase db dump --db-url "$SUPABASE_DB_URL" -f "backups/roles-$(date -u +%F).sql" --role-only
+supabase db dump --db-url "$SUPABASE_DB_URL" -f "backups/schema-$(date -u +%F).sql"
+supabase db dump --db-url "$SUPABASE_DB_URL" -f "backups/data-$(date -u +%F).sql" --use-copy --data-only -x "storage.buckets_vectors" -x "storage.vector_indexes"
+supabase db dump --db-url "$SUPABASE_DB_URL" -f "backups/history-schema-$(date -u +%F).sql" --schema supabase_migrations
+supabase db dump --db-url "$SUPABASE_DB_URL" -f "backups/history-data-$(date -u +%F).sql" --use-copy --data-only --schema supabase_migrations
 sha256sum backups/*.sql > "backups/SHA256SUMS-$(date -u +%F).txt"
 ```
 
