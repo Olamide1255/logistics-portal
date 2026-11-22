@@ -18,14 +18,14 @@ Last reviewed: 22 November 2026
 ### Routine checks
 
 1. Confirm the production deployment is **Ready** and matches the intended Git commit.
-2. Check `/`, `/login`, `/signup` and `/api/version`.
+2. Check `/`, `/login`, `/signup`, `/api/version` and `/api/health`.
 3. Review Vercel Runtime Logs for 5xx responses and uncaught function errors.
 4. Review Supabase Security, Health and Performance advisors.
 5. Review Supabase Auth and Edge Function logs for failed logins, invitation failures and notification webhook errors.
 6. Confirm the `notify` Edge Function remains active and the private `shipment-documents` bucket remains private.
 7. Confirm tenant data remains isolated when a support or test account is used.
 
-A lightweight GitHub Actions production health check runs every six hours and can also be run manually. It checks public application endpoints only; it does not sign in or access tenant data.
+A lightweight GitHub Actions production health check runs every six hours and can also be run manually. It checks public application routes and `/api/health`; the latter verifies database connectivity, Auth Admin availability and that the shipment-documents bucket still exists and remains private. It returns only `ok` or `unavailable`, without exposing tenant data.
 
 ### Free-tier monitoring limitations
 
