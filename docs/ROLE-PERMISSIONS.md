@@ -48,7 +48,7 @@ Verified outcomes:
 - All six tenant roles saw only their own tenant's shipment and client records.
 - Platform Admin could see platform-wide tenant health; a tenant Finance user was denied that RPC.
 - Finance and tenant Super Admin could access the finance/operations report and client report RPCs. Other tenant roles were denied those report RPCs.
-- Customer Service, Finance, Freight, RFS, Operations and Super Admin were tested against the shipment workflow and payment RPCs.
+- The role-specific shipment actions were exercised for Customer Service, Finance, Freight, RFS, Operations and Super Admin. Finance's payment recording and automatic full-payment approval path was exercised separately.
 - The valid end-to-end status path (Freight booking → RFS pickup/handover → Operations clearance/airline handover → Super Admin delivery) succeeded inside a rollback-only transaction.
 - Invalid transitions were rejected by the database.
 - Cross-tenant shipment and client reads returned only Tenant Alpha fixtures for the Tenant Alpha identity.
