@@ -4,7 +4,7 @@
 
 1. Confirm that the production Supabase Auth email provider has **Confirm Email** enabled.
 2. Configure and test custom SMTP for the Supabase project. Supabase's hosted default email service is limited to addresses belonging to members of the Supabase organization; it is not sufficient for sending invitations to arbitrary client domains. Custom SMTP configuration is included in the Supabase Free plan, but you still need an email provider account and its credentials.
-3. Verify that the production application URL is in Supabase Auth's allowed redirect URL list.
+3. Verify that the production application URL is in Supabase Auth's allowed redirect URL list. Set `NEXT_PUBLIC_SITE_URL` to the trusted production origin when using a custom domain; local development defaults to `http://localhost:3000`.
 4. Send a test signup confirmation and a test employee invitation to an external mailbox before onboarding a real tenant.
 
 The self-service signup endpoint now creates an unconfirmed administrator and sends a signup confirmation email. The company Super Admin cannot sign in until the address is verified. If email delivery fails, the endpoint cleans up the partially created user, profile and company instead of leaving an unusable workspace.
