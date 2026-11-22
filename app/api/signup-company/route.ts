@@ -38,7 +38,7 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    if (email.length > 254 || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: 'A valid email address is required.' }, { status: 400 });
     }
     if (password.length < 12 || password.length > 128) {
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
       { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } }
     );
 
-    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://logistics-portal-ten.vercel.app').replace(/\\/+$/, '');
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://logistics-portal-ten.vercel.app').replace(/\/+$/, '');
     const redirectTo = `${siteUrl}/login`;
 
     // Public signUp sends the confirmation email. Do not use admin.createUser here:
