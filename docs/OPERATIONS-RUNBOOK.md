@@ -31,7 +31,6 @@ A lightweight GitHub Actions production health check runs every six hours and ca
 
 - Vercel Hobby retains only one hour of runtime logs and does not include configurable Log Drains. Use the GitHub scheduled health check for basic availability and inspect Vercel logs promptly after an incident.
 - Supabase Free does not include automatic daily database backups. It also does not include Point-in-Time Recovery.
-- The current Supabase security advisor's remaining leaked-password warning is acknowledged and intentionally unchanged at the project owner's direction.
 
 ## Database backup and recovery
 
