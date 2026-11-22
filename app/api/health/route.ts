@@ -1,8 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
-export const dynamic = 'force-dynamic';
-
 const healthHeaders = { 'Cache-Control': 'no-store, max-age=0' };
 
 export async function GET() {
