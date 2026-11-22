@@ -90,7 +90,7 @@ export async function POST(req: Request) {
     const { data: user, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
-      email_confirm: true
+      email_confirm: false
     });
 
     if (authError || !user.user) {
@@ -119,7 +119,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Failed to set up the administrator account. Please try again.' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, companyId: company.id });
+    // Require proof of mailbox ownership before the new Super Admin can sign in.
+    const redirectTo = new URL('/login', new URL(req.url).origin).toString();
+    const { error: confirmationError } = await supabaseAdmin.auth.resend({
+      type: 'signup',
+      email,
+      options: { emailRedirectTo: redirectTo },
+    });
+
+    if (confirmationError) {
+      await supabaseAdmin.from('profiles').delete().eq('id', user.user.id);
+      await supabaseAdmin.auth.admin.deleteUser(user.user.id);
+      await supabaseAdmin.from('companies').delete().eq('id', company.id);
+      console.error('Signup confirmation email error:', confirmationError);
+      return NextResponse.json(
+        { error: 'We could not send the verification email. Please try again later or contact support.' },
+        { status: 503 }
+      );
+    }
+
+    return NextResponse.json({ success: true, companyId: company.id, emailConfirmationRequired: true });
   } catch (error: unknown) {
     console.error('SIGNUP FATAL:', error);
     return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });
