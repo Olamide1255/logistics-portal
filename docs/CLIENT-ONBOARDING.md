@@ -3,7 +3,7 @@
 ## Before inviting external companies
 
 1. Confirm that the production Supabase Auth email provider has **Confirm Email** enabled.
-2. Configure and test custom SMTP for the Supabase project. Supabase's hosted default email service is limited to addresses belonging to members of the Supabase organization; it is not sufficient for sending invitations to arbitrary client domains.
+2. Configure and test custom SMTP for the Supabase project. Supabase's hosted default email service is limited to addresses belonging to members of the Supabase organization; it is not sufficient for sending invitations to arbitrary client domains. Custom SMTP configuration is included in the Supabase Free plan, but you still need an email provider account and its credentials.
 3. Verify that the production application URL is in Supabase Auth's allowed redirect URL list.
 4. Send a test signup confirmation and a test employee invitation to an external mailbox before onboarding a real tenant.
 
