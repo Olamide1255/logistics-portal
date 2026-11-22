@@ -64,6 +64,11 @@ npm run test:e2e
 
 The GitHub Actions quality workflow runs migration parity, lint, a production build, API authorization smoke tests and local browser smoke tests. Authenticated staging journeys run only when the dedicated staging test credentials are configured. See [docs/STAGING.md](docs/STAGING.md) for the isolated test environment and setup.
 
+Operational and client-readiness references:
+- [Role and permission matrix](docs/ROLE-PERMISSIONS.md)
+- [Client onboarding guide](docs/CLIENT-ONBOARDING.md)
+- [Production operations, monitoring and recovery runbook](docs/OPERATIONS-RUNBOOK.md)
+
 ## Database and migration workflow
 
 - Production migrations live in `supabase/migrations/`.

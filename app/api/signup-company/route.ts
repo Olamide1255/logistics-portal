@@ -1,7 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
-import { findAuthUserByEmail } from '@/lib/findAuthUserByEmail';
 
 export async function POST(req: Request) {
   try {
@@ -50,8 +49,9 @@ export async function POST(req: Request) {
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const publicKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceRoleKey) {
+    if (!supabaseUrl || !publicKey || !serviceRoleKey) {
       console.error('Signup service is not configured.');
       return NextResponse.json({ error: 'Workspace registration is temporarily unavailable.' }, { status: 503 });
     }
@@ -59,52 +59,75 @@ export async function POST(req: Request) {
     const supabaseAdmin = createClient(
       supabaseUrl,
       serviceRoleKey,
-      { auth: { autoRefreshToken: false, persistSession: false } }
+      { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } }
+    );
+    const supabasePublic = createClient(
+      supabaseUrl,
+      publicKey,
+      { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } }
     );
 
-    // CHECK IF EMAIL ALREADY EXISTS.
-    let existingUser;
-    try {
-      existingUser = await findAuthUserByEmail(supabaseAdmin, email);
-    } catch (lookupError) {
-      console.error('Unable to check existing signup identity:', lookupError);
-      return NextResponse.json({ error: 'Unable to verify this email address. Please try again.' }, { status: 503 });
+    const defaultSiteUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://logistics-portal-ten.vercel.app';
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || defaultSiteUrl).replace(/\/+$/, '');
+    const redirectTo = `${siteUrl}/login`;
+
+    // Public signUp sends the confirmation email. Do not use admin.createUser here:
+    // the Admin API creates an unconfirmed user but does not send a confirmation email.
+    const { data: signupData, error: signupError } = await supabasePublic.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: redirectTo },
+    });
+
+    const authUser = signupData?.user;
+    if (signupError || !authUser) {
+      if (authUser?.id) {
+        const { error: cleanupError } = await supabaseAdmin.auth.admin.deleteUser(authUser.id);
+        if (cleanupError) console.error('Failed to clean up incomplete signup identity:', cleanupError);
+      }
+      console.error('Signup identity creation error:', signupError);
+      return NextResponse.json(
+        { error: 'Unable to create the administrator account or send its verification email. Please try again later.' },
+        { status: 503 }
+      );
     }
-    if (existingUser) {
-      return NextResponse.json({ error: 'An account with this email already exists.' }, { status: 409 });
+
+    // Supabase returns an obfuscated user with no identities for an existing email.
+    if (Array.isArray(authUser.identities) && authUser.identities.length === 0) {
+      return NextResponse.json(
+        { error: 'This email cannot be used to create a new workspace. Sign in or use another address.' },
+        { status: 409 }
+      );
+    }
+
+    // A non-null session means email confirmation is disabled. Refuse to create
+    // an unverified public administrator and remove the just-created identity.
+    if (signupData.session) {
+      const { error: cleanupError } = await supabaseAdmin.auth.admin.deleteUser(authUser.id);
+      if (cleanupError) console.error('Failed to remove auto-confirmed signup identity:', cleanupError);
+      return NextResponse.json(
+        { error: 'Email verification is not enabled for this service. Please contact support.' },
+        { status: 503 }
+      );
     }
 
     // CREATE COMPANY.
     const { data: company, error: companyError } = await supabaseAdmin
       .from('companies')
       .insert([{ name: companyName, status: 'Active' }])
-      .select()
+      .select('id')
       .single();
 
-    if (companyError) {
+    if (companyError || !company) {
+      const { error: cleanupError } = await supabaseAdmin.auth.admin.deleteUser(authUser.id);
+      if (cleanupError) console.error('Failed to clean up signup identity:', cleanupError);
       console.error('Company creation error:', companyError);
       return NextResponse.json({ error: 'Failed to create workspace. Please try again.' }, { status: 500 });
     }
 
-    // CREATE USER.
-    const { data: user, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true
-    });
-
-    if (authError || !user.user) {
-      await supabaseAdmin.from('companies').delete().eq('id', company.id);
-      console.error('User creation error:', authError);
-      return NextResponse.json(
-        { error: 'Unable to create the administrator account. Please verify the details and try again.' },
-        { status: 409 }
-      );
-    }
-
     // CREATE TENANT PROFILE.
     const { error: profileError } = await supabaseAdmin.from('profiles').insert([{
-      id: user.user.id,
+      id: authUser.id,
       email,
       role: 'Super Admin',
       department: 'Management',
@@ -113,13 +136,14 @@ export async function POST(req: Request) {
     }]);
 
     if (profileError) {
-      await supabaseAdmin.auth.admin.deleteUser(user.user.id);
       await supabaseAdmin.from('companies').delete().eq('id', company.id);
+      const { error: cleanupError } = await supabaseAdmin.auth.admin.deleteUser(authUser.id);
+      if (cleanupError) console.error('Failed to clean up signup identity:', cleanupError);
       console.error('Profile creation error:', profileError);
       return NextResponse.json({ error: 'Failed to set up the administrator account. Please try again.' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, companyId: company.id });
+    return NextResponse.json({ success: true, companyId: company.id, emailConfirmationRequired: true });
   } catch (error: unknown) {
     console.error('SIGNUP FATAL:', error);
     return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });
