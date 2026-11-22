@@ -8,7 +8,7 @@
 - API URL: `https://wudpgqqicypdipxzsrgj.supabase.co`
 - Plan: Free
 
-This project is isolated from production. It contains no production tenant data, Auth users, Storage objects, secrets, or notification webhook. The `shipment-documents` bucket is private and starts empty. The production database and production notification trigger are not modified by this setup.
+This project is isolated from production. It contains only synthetic tenant data, two dedicated staging Auth users, and test shipment fixtures. It has its own Vault-managed notification webhook secret and staging Edge Function configuration; no production tenant data, user credentials, service-role key, or webhook secret are copied here. The `shipment-documents` bucket is private and starts empty.
 
 ## Schema and fixtures
 
@@ -21,15 +21,14 @@ Synthetic fixtures are in `supabase-staging/seed.sql` and can be reloaded with t
 
 The fixture shipments are `STG-ALPHA-0001` and `STG-BETA-0001`. They are deliberately distinct so the authenticated Playwright test can verify tenant isolation.
 
-## Create dedicated test identities
+## Dedicated test identities
 
-Do not use production Marchlog users or real customer email addresses.
+Two confirmed synthetic identities are already provisioned in staging Auth and mapped to their intended profiles:
 
-1. Open Supabase Dashboard → Authentication → Users for the staging project.
-2. Create and confirm a user with email `staging-platform-admin@example.test`. Use a unique password generated for staging.
-3. Create and confirm a second user with email `staging-tenant@example.test`. Use a different unique password.
-4. Copy both generated Auth user UUIDs.
-5. In the staging SQL Editor, replace the two UUID placeholders below and execute:
+- Platform Admin: `staging-platform-admin@example.test`
+- Tenant user: `staging-tenant@example.test` (Customer Service, Tenant Alpha only)
+
+Do not use production Marchlog users or real customer email addresses. If these test identities ever need to be recreated, create and confirm them in Supabase Dashboard → Authentication → Users, then map their Auth UUIDs to the profiles using the SQL below. Do not promote the tenant user to Platform Admin.
 
 ```sql
 insert into public.profiles (id,email,role,company_id,is_platform_admin)
@@ -43,24 +42,20 @@ on conflict (id) do update set
   is_platform_admin=excluded.is_platform_admin;
 ```
 
-The first identity is global Platform Admin. The second belongs only to Tenant Alpha. Do not make the tenant identity a Platform Admin.
-
 ## GitHub Actions secrets
+
+The staging URL, publishable client key and synthetic test email addresses are configured in `.github/workflows/quality.yml`. Only the two staging passwords need to be stored as GitHub Actions secrets.
 
 In GitHub → repository `Olamide1255/logistics-portal` → Settings → Secrets and variables → Actions, add:
 
 | Secret | Value |
 |---|---|
-| `STAGING_SUPABASE_URL` | `https://wudpgqqicypdipxzsrgj.supabase.co` |
-| `STAGING_SUPABASE_ANON_KEY` | Staging project's publishable key (or legacy anon key) |
-| `E2E_PLATFORM_ADMIN_EMAIL` | `staging-platform-admin@example.test` |
-| `E2E_PLATFORM_ADMIN_PASSWORD` | Password chosen for the staging Platform Admin |
-| `E2E_TENANT_EMAIL` | `staging-tenant@example.test` |
-| `E2E_TENANT_PASSWORD` | Password chosen for the staging tenant user |
+| `E2E_PLATFORM_ADMIN_PASSWORD` | Existing password for the staging Platform Admin identity |
+| `E2E_TENANT_PASSWORD` | Existing password for the staging tenant identity |
 
-Get the publishable key from Supabase Dashboard → Project Settings → API Keys. It is a client key and is safe for the browser; never add a `service_role` key to GitHub Actions or frontend environment variables.
+The staging publishable key is intended for browser use; never add a `service_role` key to GitHub Actions or frontend environment variables. If the staging project is recreated or its publishable key is rotated, update the URL/key values in the workflow and re-provision the two synthetic identities.
 
-To sync and push the staging migration path, run `supabase --workdir supabase-staging link --project-ref wudpgqqicypdipxzsrgj` once, then `supabase --workdir supabase-staging db push --include-seed`. This applies pending staging migrations and the synthetic seed. New production migrations created after the staging baseline must also be mirrored into `supabase-staging/migrations/` with the same filename suffix and SQL content. Environment-specific timestamp prefixes may differ; CI checks that the mirrored SQL files match. To refresh synthetic data, rerun `supabase-staging/seed.sql` in the staging SQL Editor or use the documented seed workflow against staging only.\n\nOnce these six secrets exist, GitHub Actions builds the app against staging and runs the authenticated browser journeys locally in CI. This avoids needing a paid Supabase branch or a Vercel deployment for each test run. Without these secrets, lint/build and unauthenticated smoke tests still run, and the authenticated job is intentionally skipped.
+Once these two password secrets exist, GitHub Actions builds the app against staging and runs the authenticated browser journeys locally in CI. This avoids needing a paid Supabase branch or a Vercel deployment for each test run. Without the passwords, lint/build and unauthenticated smoke tests still run, and the authenticated job is intentionally skipped.
 
 ## Vercel Preview (optional)
 

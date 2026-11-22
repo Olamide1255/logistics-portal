@@ -13,13 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL || 'https://example.supabase.co' }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY || 'ci-placeholder-anon-key' }}
-      STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
-      STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
-      E2E_PLATFORM_ADMIN_EMAIL: ${{ secrets.E2E_PLATFORM_ADMIN_EMAIL }}
+      NEXT_PUBLIC_SUPABASE_URL: https://wudpgqqicypdipxzsrgj.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_jLmofe19_LPWoi14xkkclw_txEqmNBy
+      STAGING_SUPABASE_URL: https://wudpgqqicypdipxzsrgj.supabase.co
+      STAGING_SUPABASE_ANON_KEY: sb_publishable_jLmofe19_LPWoi14xkkclw_txEqmNBy
+      E2E_PLATFORM_ADMIN_EMAIL: staging-platform-admin@example.test
       E2E_PLATFORM_ADMIN_PASSWORD: ${{ secrets.E2E_PLATFORM_ADMIN_PASSWORD }}
-      E2E_TENANT_EMAIL: ${{ secrets.E2E_TENANT_EMAIL }}
+      E2E_TENANT_EMAIL: staging-tenant@example.test
       E2E_TENANT_PASSWORD: ${{ secrets.E2E_TENANT_PASSWORD }}
     steps:
       - name: Checkout
@@ -41,9 +41,8 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run API authorization smoke tests
         run: npm run test:e2e -- e2e/security-api.api.spec.ts
-
       - name: Run local browser smoke tests
         run: npm run test:e2e -- e2e/smoke.spec.ts
       - name: Run authenticated staging journeys
-        if: ${{ env.STAGING_SUPABASE_URL != '' && env.STAGING_SUPABASE_ANON_KEY != '' && env.E2E_PLATFORM_ADMIN_EMAIL != '' && env.E2E_PLATFORM_ADMIN_PASSWORD != '' && env.E2E_TENANT_EMAIL != '' && env.E2E_TENANT_PASSWORD != '' }}
+        if: ${{ env.E2E_PLATFORM_ADMIN_PASSWORD != '' && env.E2E_TENANT_PASSWORD != '' }}
         run: npm run test:e2e -- e2e/authenticated.spec.ts
