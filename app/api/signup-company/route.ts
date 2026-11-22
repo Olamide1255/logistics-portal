@@ -120,7 +120,7 @@ export async function POST(req: Request) {
     }
 
     // Require proof of mailbox ownership before the new Super Admin can sign in.
-    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://logistics-portal-ten.vercel.app').replace(/\\/+$/, '');
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://logistics-portal-ten.vercel.app').replace(/\/+$/, '');
     const redirectTo = `${siteUrl}/login`;
     const { error: confirmationError } = await supabaseAdmin.auth.resend({
       type: 'signup',
