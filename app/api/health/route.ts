@@ -26,11 +26,11 @@ export async function GET() {
       supabaseAdmin.storage.getBucket('shipment-documents'),
     ]);
 
-    if (database.error || auth.error || documentsBucket.error || documentsBucket.data.public) {
+    if (database.error || auth.error || documentsBucket.error || !documentsBucket.data || documentsBucket.data.public) {
       console.error('Backend health check failed.', {
         database: Boolean(database.error),
         auth: Boolean(auth.error),
-        storage: Boolean(documentsBucket.error || documentsBucket.data?.public),
+        storage: Boolean(documentsBucket.error || !documentsBucket.data || documentsBucket.data.public),
       });
       return NextResponse.json({ status: 'unavailable' }, { status: 503, headers: healthHeaders });
     }
