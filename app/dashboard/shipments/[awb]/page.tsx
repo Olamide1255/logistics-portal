@@ -242,7 +242,7 @@ export default function ShipmentDetails() {
     const matchingType = allowedFileTypes[file.type];
 
     if (!actionBy.trim()) {
-      toast.error('Enter your name in the "Action By" field before uploading.');
+      toast.error('Your authenticated account could not be identified. Sign in again before uploading.');
       e.target.value = '';
       return;
     }
@@ -805,8 +805,8 @@ export default function ShipmentDetails() {
                 <h2 className="text-lg font-bold text-slate-900 mb-4">Action Panel</h2>
                 
                 <div className="mb-6">
-                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Action By (Your Name) *</label>
-                  <input type="text" aria-label="Your name for this shipment action" placeholder="e.g. John Doe" value={actionBy} onChange={e => setActionBy(e.target.value)} className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium shadow-sm" />
+                  <label className="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Action by (authenticated account)</label>
+                  <input type="email" readOnly aria-label="Action attributed to authenticated account" value={actionBy} className="w-full border border-slate-200 p-3 rounded-xl text-slate-600 bg-slate-100 font-medium shadow-sm" />
                 </div>
 
                 {shipment.payment_status === 'Pending' && (userRole === 'Finance' || userRole === 'Super Admin') && (
@@ -987,8 +987,8 @@ export default function ShipmentDetails() {
                 <input id="payment-reference" type="text" maxLength={255} value={paymentRef} onChange={e => setPaymentRef(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="Optional e.g. GTB-12345" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Recorded By (Your Name)</label>
-                <input type="text" required value={actionBy} onChange={e => setActionBy(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="e.g. Jane Doe" />
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Recorded By (authenticated account)</label>
+                <input type="email" readOnly required value={actionBy} aria-label="Payment attributed to authenticated account" className="w-full border border-slate-200 bg-slate-100 p-2.5 rounded-xl text-sm text-slate-600" />
               </div>
               <button type="submit" disabled={isSubmitting} className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition-all flex justify-center items-center gap-2 mt-2">
                 {isSubmitting ? 'Processing...' : 'Record Payment'}
