@@ -28,8 +28,8 @@ export default function Signup() {
         throw new Error(data.error || 'Signup failed. Please try again.');
       }
 
-      toast.success('Workspace created! Redirecting to login...');
-      setTimeout(() => router.push('/login'), 2000);
+      toast.success('Workspace created. Check your email to verify your admin address before signing in.');
+      setTimeout(() => router.push('/login'), 4000);
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : 'Unable to create your workspace.');
       setLoading(false);
@@ -48,7 +48,7 @@ export default function Signup() {
         </div>
 
         <h1 className="text-2xl font-bold text-center text-slate-900 mb-2">Create your Workspace</h1>
-        <p className="text-center text-slate-500 text-sm mb-8">Set up your company on LogiFlow</p>
+        <p className="text-center text-slate-500 text-sm mb-8">Set up your company on LogiFlow. We’ll send a verification link to the admin email.</p>
 
         <form onSubmit={handleSignup} className="space-y-4">
           <div>
@@ -100,7 +100,7 @@ export default function Signup() {
               className="w-full border border-slate-200 p-3 rounded-xl text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 disabled:opacity-60"
               placeholder="At least 12 characters"
             />
-            <p className="mt-1.5 text-xs text-slate-500">Use a long passphrase that is unique to this account.</p>
+            <p className="mt-1.5 text-xs text-slate-500">Use a long passphrase that is unique to this account. You must verify the admin email before signing in.</p>
           </div>
           <button
             disabled={loading}
