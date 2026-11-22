@@ -9,6 +9,8 @@ Last reviewed: 22 November 2026
 - Current Supabase organization plan: Free.
 - Current Vercel project: Hobby/Free.
 - Preview deployments are disabled to avoid unnecessary builds and quota use.
+
+**Commercial-use gate:** Vercel's Hobby plan is designated for personal, non-commercial use. This portal is intended to serve logistics companies, so confirm that the hosting plan's terms permit the intended customer-facing/commercial use before onboarding paying clients. A free-only constraint does not override the provider's plan terms. See [Vercel Hobby plan](https://vercel.com/docs/plans/hobby).
 - Production release policy: merge reviewed work, allow one production deployment, verify that exact deployment, and do not redeploy for cosmetic reassurance.
 
 ## Monitoring
