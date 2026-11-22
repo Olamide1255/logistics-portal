@@ -159,8 +159,8 @@ const res = await fetch('/api/invite', {
                   <option value="Freight">Freight</option>
                   <option value="RFS">RFS</option>
                   <option value="Operations">Operations</option>
-                  <option value="Super Admin">Super Admin (Admin)</option>
                 </select>
+                <p className="mt-1.5 text-xs text-slate-500">Company Super Admin access is assigned by a Platform Admin.</p>
               </div>
               <div>
                 <label htmlFor="invite-employee-department" className="mb-1 block text-xs font-bold uppercase text-slate-500">Department</label>
@@ -198,7 +198,7 @@ const res = await fetch('/api/invite', {
                 <td className="px-6 py-4 font-bold text-slate-900">{emp.email}</td>
                 <td className="px-6 py-4">
                   <label className="sr-only" htmlFor={`employee-role-${emp.id}`}>Role for {emp.email}</label><select id={`employee-role-${emp.id}`} value={emp.role} onChange={(e) => handleUpdate(emp.id, 'role', e.target.value)} disabled={updatingId === emp.id || emp.is_platform_admin || emp.id === currentUserId} aria-label={`Role for ${emp.email}`} title={emp.id === currentUserId ? 'You cannot change your own role.' : 'Update employee role'} className="border border-slate-200 p-2 rounded-lg text-sm text-slate-900 bg-white disabled:opacity-50">
-                    <option value="Super Admin">Super Admin</option>
+                    {emp.role === 'Super Admin' && <option value="Super Admin" disabled>Super Admin (Platform assigned)</option>}
                     <option value="Customer Service">Customer Service</option>
                     <option value="Finance">Finance</option>
                     <option value="Freight">Freight</option>
