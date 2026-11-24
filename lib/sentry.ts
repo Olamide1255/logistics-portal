@@ -18,7 +18,13 @@ function getSentryEndpoint(dsn: string) {
 export async function captureSentryException(error: unknown, context: SentryContext = {}) {
   const dsn = process.env.SENTRY_DSN;
   if (!dsn) return;
-  const target = getSentryEndpoint(dsn);
+  let target: ReturnType<typeof getSentryEndpoint>;
+  try {
+    target = getSentryEndpoint(dsn);
+  } catch {
+    console.error('Sentry DSN is invalid; error event was not sent.');
+    return;
+  }
   if (!target) return;
 
   const exception = error instanceof Error ? error : new Error(String(error));
@@ -28,7 +34,7 @@ export async function captureSentryException(error: unknown, context: SentryCont
     .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
     .slice(0, 1000);
   const frames = (exception.stack || '').split('\n').slice(1, 25).reverse().map((line) => ({
-    filename: line.trim().slice(0, 500),
+    filename: line.trim().replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/gi, '[email]').slice(0, 500),
     function: 'unknown',
   }));
 
