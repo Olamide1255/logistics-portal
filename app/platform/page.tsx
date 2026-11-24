@@ -34,6 +34,7 @@ export default function PlatformAdmin() {
   const [newCompanyName, setNewCompanyName] = useState('');
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
   const [updatingCompanyId, setUpdatingCompanyId] = useState<string | null>(null);
 
   const fetchPlatformData = useCallback(async (showRefresh = false) => {
@@ -77,7 +78,8 @@ export default function PlatformAdmin() {
   const handleCreateCompany = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (isCreating) return;
-    if (!newCompanyName.trim() || !newAdminEmail.trim()) return toast.error('Please fill all fields.');
+    if (!newCompanyName.trim() || !newAdminEmail.trim()) { setCreateError('Enter both a company name and administrator email.'); return; }
+    setCreateError('');
     setIsCreating(true);
     try {
       const { data: newCompany, error: companyError } = await supabase
@@ -103,7 +105,9 @@ export default function PlatformAdmin() {
       setNewAdminEmail('');
       await fetchPlatformData(true);
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Company onboarding failed. If the company was created, it remains available for a safe invitation retry.');
+      const message = error instanceof Error ? error.message : 'Company onboarding failed. If the company was created, it remains available for a safe invitation retry.';
+      setCreateError(message);
+      toast.error(message);
       await fetchPlatformData(true);
     } finally {
       setIsCreating(false);
@@ -185,6 +189,7 @@ export default function PlatformAdmin() {
       <section id="onboard-company" className="scroll-mt-24 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
         <div className="mb-5"><div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><Plus size={20} /></div><h2 className="text-lg font-bold text-slate-950">Onboard a company</h2><p className="mt-1 text-sm leading-5 text-slate-500">Create a tenant and invite its first company administrator.</p></div>
         <form onSubmit={handleCreateCompany} className="space-y-4">
+          {createError && <p role="alert" aria-live="polite" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-5 text-red-700">{createError}</p>}
           <div><label htmlFor="company-name" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Company name</label><input id="company-name" type="text" value={newCompanyName} onChange={e => setNewCompanyName(e.target.value)} disabled={isCreating} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 disabled:opacity-60" placeholder="e.g. Acme Logistics" required /></div>
           <div><label htmlFor="admin-email" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-500">Administrator email</label><input id="admin-email" type="email" value={newAdminEmail} onChange={e => setNewAdminEmail(e.target.value)} disabled={isCreating} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3 text-sm text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white focus:ring-4 focus:ring-indigo-500/10 disabled:opacity-60" placeholder="admin@company.com" required /></div>
           <button disabled={isCreating} type="submit" className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/15 transition hover:bg-indigo-700 disabled:cursor-wait disabled:bg-indigo-400">{isCreating ? <><Loader2 size={17} className="animate-spin" /> Creating company…</> : <><Plus size={17} /> Create company & invite admin</>}</button>
