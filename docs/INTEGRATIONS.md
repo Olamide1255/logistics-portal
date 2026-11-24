@@ -2,22 +2,22 @@
 
 LogiFlow keeps optional third-party integrations limited to PostHog and Resend. Supabase remains the core authentication, database, storage and rate-limiting service; Vercel remains the application host. Never commit API keys, tokens or service credentials.
 
-## Resend — transactional email
+## Resend — future transactional email transport
 
-Supabase Auth sends signup verification, invitations and password-reset messages. Use Resend as the SMTP transport so those messages continue to use Supabase's secure token and confirmation flows.
+Resend is not currently connected. It is the planned SMTP transport for Supabase Auth after a verified sending domain is available. Supabase Auth will continue generating and validating signup verification, invitation and password-reset links; Resend will only transport those messages.
 
 1. Add and verify a sending domain in Resend. Configure the SPF and DKIM records Resend provides; publish a DMARC policy for the domain.
 2. In Supabase Dashboard, open **Authentication → SMTP Settings** and enable custom SMTP.
 3. Use Resend's SMTP endpoint `smtp.resend.com`, port `465` (implicit TLS) or `587` (STARTTLS), username `resend`, and the Resend API key as the SMTP password.
 4. Set the sender address to an address on the verified domain, for example `notifications@your-verified-domain`.
-5. Keep email confirmation enabled and auto-confirm disabled in Supabase Auth; the workspace signup flow deliberately refuses to create an unverified public administrator. Set the same sender identity in Supabase Auth, save, and send a test signup/invitation/reset email to an external mailbox.
+5. Keep email confirmation enabled and auto-confirm disabled in Supabase Auth. Set the same sender identity in Supabase Auth, save, and send a test signup/invitation/reset email to an external mailbox.
 6. Keep the API key in the Supabase SMTP password field only. Do not expose it through a `NEXT_PUBLIC_*` variable or commit it to Git.
 
-Supabase Auth remains responsible for generating and validating secure action links; Resend transports the email. This avoids creating a second password-reset or invitation-token system. Until custom SMTP is enabled and tested, do not treat external customer onboarding as ready: Supabase's default hosted mailer is restricted to project-team addresses and is rate-limited.
+Until custom SMTP is enabled and tested, do not treat external customer onboarding as ready: Supabase's default hosted mailer is restricted to project-team addresses and is rate-limited. No domain purchase or Resend configuration is required for current local staging tests.
 
 ## PostHog — consent-aware product analytics and server logs
 
-Set these Vercel Production and Preview environment variables. Also set `NEXT_PUBLIC_SITE_URL` to the canonical production origin (`https://logistics-portal-ten.vercel.app`) in Production:
+Set these Vercel environment variables in **Production**. Preview deployments are currently disabled for this project; add Preview values only if preview deployments are deliberately re-enabled. Set `NEXT_PUBLIC_SITE_URL` to the canonical production origin (`https://logistics-portal-ten.vercel.app`) in Production:
 - `NEXT_PUBLIC_POSTHOG_KEY`: PostHog project token (`phc_...`).
 - `NEXT_PUBLIC_POSTHOG_HOST`: your PostHog ingestion host, for example `https://eu.i.posthog.com` for an EU project or `https://us.i.posthog.com` for a US project.
 
@@ -27,7 +27,8 @@ Server-side operational logs use the same PostHog project token and regional hos
 
 ## Deployment checklist
 
-- Configure PostHog's project token and regional host in Vercel; never commit credentials.
-- Configure Resend's verified domain and custom SMTP credentials directly in Supabase Auth.
-- Verify consent acceptance/rejection, PostHog page/event/log ingestion, and Resend delivery to an external mailbox before customer onboarding.
-- Redeploy once after all required environment values are saved and reviewed.
+- Confirm PostHog's project token and regional host are configured in Vercel Production; never commit credentials.
+- Confirm Resend's verified domain and custom SMTP credentials directly in Supabase Auth before enabling public customer email flows.
+- Verify consent acceptance/rejection and PostHog page/event/log ingestion after the approved production deployment.
+- Verify Resend delivery to an external mailbox before customer onboarding.
+- Follow the one-deployment release policy: deploy once only after all required environment values and pre-deployment checks are reviewed.
