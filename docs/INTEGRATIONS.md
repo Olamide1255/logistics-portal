@@ -21,7 +21,7 @@ Set these Vercel Production and Preview environment variables (the project token
 - `NEXT_PUBLIC_POSTHOG_KEY`: PostHog project token (`phc_...`).
 - `NEXT_PUBLIC_POSTHOG_HOST`: your PostHog ingestion host, e.g. `https://us.i.posthog.com` or your regional host.
 
-Analytics are not loaded until a visitor accepts optional analytics cookies. Rejecting optional analytics prevents the SDK from loading. Autocapture and session recording are disabled. Page views use normalized paths: tracking tokens and AWB identifiers are never sent as URL values. Do not identify users or send shipment, customer, financial, email, document or other personal data to PostHog.
+Analytics are not loaded until a visitor accepts optional analytics cookies. Rejecting optional analytics prevents the SDK from loading. Autocapture and session recording are disabled. Page views use normalized paths: tracking tokens and AWB identifiers are never sent as URL values. The initial product events are limited to `workspace_signup_completed`, `shipment_created`, `employee_invite_sent` and `operations_report_exported`; they carry no event properties or record identifiers. Do not identify users or send shipment, customer, financial, email, document or other personal data to PostHog.
 
 ## Sentry — error monitoring
 
