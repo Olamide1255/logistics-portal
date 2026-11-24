@@ -15,7 +15,7 @@ export default function TermsPage() {
         <p className="mt-8 text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Legal</p>
         <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-slate-950">Terms of service</h1>
         <p className="mt-3 text-sm text-slate-500">Last updated: 24 November 2026</p>
-        <div className="prose prose-slate mt-10 max-w-none prose-headings:font-bold prose-headings:text-slate-950 prose-a:text-indigo-600">
+        <div className="legal-content mt-10 max-w-none">
           <p>These terms govern access to the LogiFlow website and logistics operations platform. By creating an account or using a company workspace, you agree to follow these terms and any service agreement that applies to your organisation.</p>
           <h2>1. The service</h2>
           <p>LogiFlow provides a business workspace for managing logistics operations, shipment records, manual status updates, handovers, documents, employee access, notifications and reporting. Shipment information reflects records entered by authorised users and connected providers; the platform does not itself guarantee live GPS, airline-system or carrier-system tracking.</p>
