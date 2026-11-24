@@ -1,7 +1,8 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft, Home, SearchX } from 'lucide-react';
 
-export default function NotFound() {
+export const metadata: Metadata = { title: 'Page not found', robots: { index: false, follow: false } };\n\nexport default function NotFound() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
       <section className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-9 text-center shadow-xl shadow-slate-900/5">
