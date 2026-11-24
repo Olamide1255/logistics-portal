@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   title: 'Privacy policy',
   description: 'How LogiFlow handles account, company, shipment, document and product-usage information.',
   alternates: { canonical: '/privacy' },
+  openGraph: { type: 'website', title: "Privacy policy | LogiFlow", description: "How LogiFlow handles account, company, shipment, document and product-usage information.", images: ['/opengraph-image'] },
+  twitter: { card: 'summary_large_image', title: "Privacy policy | LogiFlow", description: "How LogiFlow handles account, company, shipment, document and product-usage information.", images: ['/twitter-image'] },
+
 };
 
 export default function PrivacyPolicyPage() {
