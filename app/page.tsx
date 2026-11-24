@@ -81,7 +81,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="px-4 py-8 pb-24 text-center text-sm font-medium text-slate-500 sm:pb-8" suppressHydrationWarning>
-        <p>&copy; {new Date().getFullYear()} LogiFlow. All rights reserved.</p>
+        <p>&copy; 2026 LogiFlow. All rights reserved.</p>
         <nav aria-label="Legal" className="mt-3 flex justify-center gap-5">
           <Link href="/privacy" className="hover:text-indigo-600 hover:underline">Privacy policy</Link>
           <Link href="/terms" className="hover:text-indigo-600 hover:underline">Terms of service</Link>
