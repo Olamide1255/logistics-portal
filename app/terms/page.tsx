@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   title: 'Terms of service',
   description: 'Terms for accessing and using the LogiFlow logistics operations platform.',
   alternates: { canonical: '/terms' },
+  openGraph: { type: 'website', title: "Terms of service | LogiFlow", description: "Terms for accessing and using the LogiFlow logistics operations platform.", images: ['/opengraph-image'] },
+  twitter: { card: 'summary_large_image', title: "Terms of service | LogiFlow", description: "Terms for accessing and using the LogiFlow logistics operations platform.", images: ['/twitter-image'] },
+
 };
 
 export default function TermsPage() {
