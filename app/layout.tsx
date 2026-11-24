@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     images: ["/twitter-image"],
   },
   icons: {
-    icon: [{ url: "/favicon.ico" }, { url: "/icon.png", type: "image/png", sizes: "512x512" }],
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml", sizes: "any" }, { url: "/favicon.ico" }, { url: "/icon.png", type: "image/png", sizes: "512x512" }],
     apple: [{ url: "/apple-icon", sizes: "180x180", type: "image/png" }],
   },
   robots: {
