@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Users, ShieldAlert, Plus, X, Loader2 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
+import posthog from 'posthog-js';
 
 const PAGE_SIZE = 50;
 
@@ -83,6 +84,10 @@ export default function EmployeeManagement() {
     
     if (error) toast.error("Failed to update: " + error.message);
     else {
+      posthog.capture('employee_attribute_updated', {
+        attribute: field,
+        value,
+      });
       toast.success(`Employee ${field} updated.`);
       setEmployees(employees.map(e => e.id === userId ? { ...e, [field]: value } : e));
     }
@@ -108,6 +113,10 @@ const res = await fetch('/api/invite', {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
+      posthog.capture('employee_invited', {
+        role: inviteRole,
+        department: inviteDept,
+      });
       toast.success(`Invite sent to ${inviteEmail}!`);
       setShowInvite(false);
       setInviteEmail('');

@@ -1,6 +1,13 @@
+import { SeverityNumber } from '@opentelemetry/api-logs';
 import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
+import { PostHog } from 'posthog-node';
+import { after, NextResponse } from 'next/server';
+import { posthogLogger, loggerProvider } from '@/instrumentation';
 import { rateLimit, getClientIP } from '@/lib/rateLimit';
+
+function flushPostHogLogs() {
+  after(() => loggerProvider?.forceFlush().catch(() => {}));
+}
 
 export async function POST(req: Request) {
   try {
@@ -9,6 +16,12 @@ export async function POST(req: Request) {
     const { success } = await rateLimit(`signup_${ip}`, 3, 60 * 60 * 1000);
 
     if (!success) {
+      posthogLogger?.emit({
+        body: 'Workspace signup request rate limited',
+        severityNumber: SeverityNumber.WARN,
+        attributes: { endpoint: '/api/signup-company', operation: 'workspace_signup' },
+      });
+      flushPostHogLogs();
       return NextResponse.json(
         { error: 'Too many signup attempts. Please try again in an hour.' },
         { status: 429 }
@@ -143,9 +156,51 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Failed to set up the administrator account. Please try again.' }, { status: 500 });
     }
 
+    const posthogToken = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
+    const posthogHost = process.env.NEXT_PUBLIC_POSTHOG_HOST;
+    if (posthogToken && posthogHost) {
+      const posthog = new PostHog(posthogToken, {
+        host: posthogHost,
+        enableExceptionAutocapture: true,
+        flushAt: 1,
+        flushInterval: 0,
+        requestTimeout: 2000,
+        fetchRetryCount: 0,
+      });
+      posthog.capture({
+        distinctId: authUser.id,
+        event: 'workspace_signed_up',
+        properties: {
+          role: 'Super Admin',
+          email_confirmation_required: true,
+        },
+      });
+      await posthog.shutdown().catch(() => {});
+    } else if (process.env.NODE_ENV !== 'production') {
+      if (!posthogToken) console.warn('NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN variable required by PostHog is missing or un-configured, this causes events to be silently missed. This error stops appearing once NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN is configured');
+      if (!posthogHost) console.warn('NEXT_PUBLIC_POSTHOG_HOST variable required by PostHog is missing or un-configured, this causes events to be silently missed. This error stops appearing once NEXT_PUBLIC_POSTHOG_HOST is configured');
+    }
+
+    posthogLogger?.emit({
+      body: 'Workspace signup completed',
+      severityNumber: SeverityNumber.INFO,
+      attributes: {
+        endpoint: '/api/signup-company',
+        operation: 'workspace_signup',
+        email_confirmation_required: true,
+      },
+    });
+    flushPostHogLogs();
+
     return NextResponse.json({ success: true, companyId: company.id, emailConfirmationRequired: true });
   } catch (error: unknown) {
     console.error('SIGNUP FATAL:', error);
+    posthogLogger?.emit({
+      body: 'Workspace signup failed unexpectedly',
+      severityNumber: SeverityNumber.ERROR,
+      attributes: { endpoint: '/api/signup-company', operation: 'workspace_signup' },
+    });
+    flushPostHogLogs();
     return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });
   }
 }

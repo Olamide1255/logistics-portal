@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import { ShieldAlert } from 'lucide-react';
 import Link from 'next/link';
+import posthog from 'posthog-js';
 
 export default function RegisterShipment() {
   const router = useRouter();
@@ -95,6 +96,13 @@ export default function RegisterShipment() {
         shipment_awb: formData.awb_number
       }]);
 
+      posthog.capture('shipment_registered', {
+        shipment_type: formData.shipment_type,
+        service_type: formData.service_type,
+        currency: formData.currency,
+        has_expected_delivery_date: Boolean(formData.expected_delivery_date),
+        has_payment_due_date: Boolean(formData.payment_due_date),
+      });
       setSuccess('Shipment registered successfully!');
       setFormData(initialFormState); 
       setTimeout(() => router.push('/dashboard/shipments'), 2000); 

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { LayoutDashboard, LogOut, Menu, ShieldCheck, Loader2, X, Building2, PlusCircle } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
+import posthog from 'posthog-js';
 export default function PlatformLayout({ children }: { children: ReactNode }) {
   const [checkingAccess, setCheckingAccess] = useState(true);
   const [email, setEmail] = useState('');
@@ -22,6 +23,11 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
         if (error) throw error;
         if (!active) return;
         if (!profile?.is_platform_admin) { router.replace('/dashboard'); return; }
+        posthog.identify(user.id, {
+          ...(user.email ? { email: user.email } : {}),
+          role: 'Platform Admin',
+          is_platform_admin: true,
+        });
         setEmail(user.email || '');
         setCheckingAccess(false);
       } catch {
@@ -38,6 +44,7 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+      posthog.reset();
       // A hard navigation guarantees the authenticated App Router tree is discarded.
       window.location.replace('/login');
     } catch (error) {
