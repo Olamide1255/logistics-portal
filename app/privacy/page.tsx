@@ -15,7 +15,7 @@ export default function PrivacyPolicyPage() {
         <p className="mt-8 text-xs font-bold uppercase tracking-[0.18em] text-indigo-600">Legal</p>
         <h1 className="mt-2 text-4xl font-extrabold tracking-tight text-slate-950">Privacy policy</h1>
         <p className="mt-3 text-sm text-slate-500">Last updated: 24 November 2026</p>
-        <div className="prose prose-slate mt-10 max-w-none prose-headings:font-bold prose-headings:text-slate-950 prose-a:text-indigo-600">
+        <div className="legal-content mt-10 max-w-none">
           <p>This policy explains how LogiFlow processes information when you visit the website or use the logistics operations platform. It is written for a business service used by freight forwarders, clearing agents and their authorised teams.</p>
           <h2>1. Who is responsible for the information?</h2>
           <p>For account registration, platform administration, service security and website analytics, the LogiFlow service operator acts as the responsible organisation. For shipment, customer, consignee, document and operational information entered by a subscribing company, that company generally determines why the information is used and who may access it. LogiFlow processes that information to provide the service and follows the applicable customer instructions and service agreement.</p>
