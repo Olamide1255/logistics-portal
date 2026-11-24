@@ -1,7 +1,7 @@
 {
-  "name": "Marchlog Logistics Portal",
-  "short_name": "Marchlog",
-  "description": "Internal Logistics Management System",
+  "name": "LogiFlow Logistics Operations",
+  "short_name": "LogiFlow",
+  "description": "Logistics operations workspace for freight forwarders and clearing teams",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
