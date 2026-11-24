@@ -28,7 +28,7 @@ export async function capturePostHogLog(input: {
     return;
   }
 
-  const now = (BigInt(Date.now()) * 1_000_000n).toString();
+  const now = `${Date.now()}000000`;
   const safeAttributes = Object.entries(input.attributes || {})
     .filter(([key, value]) => /^[a-zA-Z][a-zA-Z0-9_.-]{0,63}$/.test(key) && typeof value === 'string')
     .slice(0, 12)
