@@ -15,13 +15,15 @@ Supabase Auth currently sends signup verification, invitations and password-rese
 
 Supabase Auth remains responsible for generating and validating secure action links; Resend transports the email. This avoids creating a second password-reset or invitation-token system. Until custom SMTP is enabled and tested, do not treat external customer onboarding as ready: Supabase's default hosted mailer is restricted to project-team addresses and is rate-limited.
 
-## PostHog — consent-aware product analytics
+## PostHog — consent-aware product analytics and server logs
 
 Set these Vercel Production and Preview environment variables (the project token is intended to be public). Also set `NEXT_PUBLIC_SITE_URL` to the canonical production origin (currently `https://logistics-portal-ten.vercel.app`) in Production; use the actual preview origin only when you specifically need preview canonical metadata:
 - `NEXT_PUBLIC_POSTHOG_KEY`: PostHog project token (`phc_...`).
 - `NEXT_PUBLIC_POSTHOG_HOST`: your PostHog ingestion host, e.g. `https://us.i.posthog.com` or your regional host.
 
-Analytics are not loaded until a visitor accepts optional analytics cookies. Rejecting optional analytics prevents the SDK from loading. Autocapture and session recording are disabled. Page views use normalized paths: tracking tokens and AWB identifiers are never sent as URL values. The initial product events are limited to `workspace_signup_completed`, `shipment_created`, `employee_invite_sent` and `operations_report_exported`; they carry no event properties or record identifiers. Do not identify users or send shipment, customer, financial, email, document or other personal data to PostHog.
+Browser analytics are not loaded until a visitor accepts optional analytics cookies. Rejecting optional analytics prevents the SDK from loading. Autocapture and session recording are disabled. Page views use normalized paths: tracking tokens and AWB identifiers are never sent as URL values. The initial product events are limited to `workspace_signup_completed`, `shipment_created`, `employee_invite_sent` and `operations_report_exported`; they carry no event properties or record identifiers. Do not identify users or send shipment, customer, financial, email, document or other personal data to PostHog.
+
+Server-side operational logs use the same PostHog project token and regional host, but are sent separately to PostHog's OTLP Logs endpoint. The existing Next.js `instrumentation.ts` reports a minimal error log when Next.js reports a request/render error. Only a generic message, route template, HTTP method, and request source are sent; raw exception messages, stacks, headers, cookies, user identifiers, shipment data and request query strings are excluded. Logs are sent only when `NEXT_PUBLIC_POSTHOG_KEY` is configured. Delivery is best-effort and does not block application requests. No extra OpenTelemetry packages or Next.js instrumentation config flag are required for this lightweight OTLP HTTP implementation. If you later need general application logs or tracing, add the relevant OpenTelemetry SDK and explicitly flush it at the end of each serverless request.
 
 ## Sentry — error monitoring
 
@@ -44,4 +46,4 @@ Pinecone is intentionally not connected yet. The current portal has no semantic 
 - Configure each provider's credentials directly in its dashboard and Vercel/Supabase environment settings.
 - Add credentials to Production first; use separate test projects/keys for Preview.
 - Redeploy once after all environment values are saved.
-- Verify Resend delivery, PostHog consent/rejection behavior, a Sentry test event, and Upstash rate-limit behavior before enabling the integrations for customers.
+- Verify Resend delivery, PostHog consent/rejection behavior and server log ingestion, a Sentry test event, and Upstash rate-limit behavior before enabling the integrations for customers.
