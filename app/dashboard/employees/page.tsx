@@ -22,6 +22,7 @@ export default function EmployeeManagement() {
   const [inviteRole, setInviteRole] = useState('Customer Service');
   const [inviteDept, setInviteDept] = useState('Customer Service');
   const [isInviting, setIsInviting] = useState(false);
+  const [inviteError, setInviteError] = useState('');
 
   const fetchEmployees = useCallback(async (targetPage = page) => {
     setLoading(true);
@@ -91,6 +92,7 @@ export default function EmployeeManagement() {
 
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
+    setInviteError('');
     setIsInviting(true);
 
     try {
@@ -113,8 +115,10 @@ const res = await fetch('/api/invite', {
       setInviteEmail('');
       if (page === 0) await fetchEmployees(0);
       else setPage(0);
-    } catch (error: any) {
-      toast.error(error.message);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to send the invitation. Please try again.';
+      setInviteError(message);
+      toast.error(message);
     } finally {
       setIsInviting(false);
     }
@@ -147,6 +151,7 @@ const res = await fetch('/api/invite', {
               <button type="button" onClick={() => setShowInvite(false)} aria-label="Close invite dialog" className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"><X size={20}/></button>
             </div>
             <form onSubmit={handleInvite} className="p-6 space-y-4">
+              {inviteError && <p role="alert" aria-live="polite" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">{inviteError}</p>}
               <div>
                 <label htmlFor="invite-employee-email" className="mb-1 block text-xs font-bold uppercase text-slate-500">Email Address</label>
                 <input id="invite-employee-email" type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900" placeholder="employee@company.com" />
