@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import DashboardShell from '@/components/dashboard-shell';
 
 export const metadata: Metadata = {
-  title: { default: 'Workspace', template: '%s' },
+  title: { default: 'Workspace', template: '%s | LogiFlow' },
   description: 'Private LogiFlow company workspace.',
   robots: { index: false, follow: false, noarchive: true },
 };
