@@ -9,10 +9,16 @@ export function ClientErrorReporter() {
         .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
         .replace(/\b[0-9a-f]{8}-[0-9a-f-]{27,}\b/gi, '[id]')
         .slice(0, 2500);
+      const currentPath = window.location.pathname;
+      const safePath = currentPath.startsWith('/track/')
+        ? '/track/[token]'
+        : currentPath.startsWith('/dashboard/shipments/')
+          ? '/dashboard/shipments/[awb]'
+          : currentPath;
       void fetch('/api/monitoring/client-error', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: clean(message), stack: clean(stack || ''), path: window.location.pathname.startsWith('/track/') ? '/track/[token]' : /^\\/dashboard\\/shipments\\/[^/]+/.test(window.location.pathname) ? '/dashboard/shipments/[awb]' : window.location.pathname }),
+        body: JSON.stringify({ message: clean(message), stack: clean(stack || ''), path: safePath }),
         keepalive: true,
       }).catch(() => {});
     };
