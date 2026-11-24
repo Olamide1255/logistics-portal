@@ -1,4 +1,5 @@
 'use client';
+import { trackProductEvent } from '@/lib/product-analytics';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -30,6 +31,7 @@ export default function Signup() {
         throw new Error(data.error || 'Signup failed. Please try again.');
       }
 
+      trackProductEvent('workspace_signup_completed');
       router.push('/thank-you');
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unable to create your workspace.';
