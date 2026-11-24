@@ -31,7 +31,7 @@ export default function PlatformLayout({ children }: { children: ReactNode }) {
     void verify();
     return () => { active = false; };
   }, [router]);
-  useEffect(() => { setMobileNavOpen(false); document.title = pathname === '/platform' ? 'SaaS Dashboard | LogiFlow' : 'Platform Console | LogiFlow'; }, [pathname]);
+  useEffect(() => { setMobileNavOpen(false); }, [pathname]);
   const signOut = async () => {
     if (signingOut) return;
     setSigningOut(true);
