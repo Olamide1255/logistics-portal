@@ -1,4 +1,5 @@
 'use client';
+import { trackProductEvent } from '@/lib/product-analytics';
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Users, ShieldAlert, Plus, X, Loader2 } from 'lucide-react';
@@ -110,6 +111,7 @@ const res = await fetch('/api/invite', {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
+      trackProductEvent('employee_invite_sent');
       toast.success(`Invite sent to ${inviteEmail}!`);
       setShowInvite(false);
       setInviteEmail('');
