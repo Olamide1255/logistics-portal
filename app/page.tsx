@@ -34,7 +34,7 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-20 pb-24 px-4 text-center max-w-4xl mx-auto">
+      <section className="pt-12 pb-20 px-4 text-center max-w-4xl mx-auto sm:pt-20 sm:pb-24">
         <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 ring-1 ring-indigo-200">
           <Zap size={14} /> A connected workspace for logistics teams
         </div>
