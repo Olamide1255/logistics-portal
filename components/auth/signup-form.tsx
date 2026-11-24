@@ -8,11 +8,13 @@ import { toast, Toaster } from 'sonner';
 export default function Signup() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState({ companyName: '', email: '', password: '' });
 
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (loading) return;
+    setError('');
     setLoading(true);
 
     try {
@@ -30,7 +32,9 @@ export default function Signup() {
 
       router.push('/thank-you');
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Unable to create your workspace.');
+      const message = error instanceof Error ? error.message : 'Unable to create your workspace.';
+      setError(message);
+      toast.error(message);
       setLoading(false);
     }
   };
@@ -49,6 +53,7 @@ export default function Signup() {
         <h1 className="text-2xl font-bold text-center text-slate-900 mb-2">Create your Workspace</h1>
         <p className="text-center text-slate-500 text-sm mb-8">Set up your company on LogiFlow. We’ll send a verification link to the admin email.</p>
 
+        {error && <div role="alert" aria-live="polite" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
         <form onSubmit={handleSignup} className="space-y-4">
           <div>
             <label htmlFor="company-name" className="block text-sm font-bold text-slate-700 mb-1">Company Name</label>
