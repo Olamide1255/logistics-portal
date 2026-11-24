@@ -77,33 +77,37 @@ export default function CompanySettings() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!company) { setSaveError('No company data loaded. Refresh the page and try again.'); return; }
+    if (saving) return;
+    if (!company) {
+      setSaveError('No company data loaded. Refresh the page and try again.');
+      return;
+    }
+
     setSaveError('');
     setSaving(true);
-    
-    // 1. Update Company Info
-    const { error: compError } = await supabase.from('companies').update({
-      name: formData.name, 
-      email: formData.email, 
-      phone: formData.phone, 
-      address: formData.address
-    }).eq('id', company.id);
-    
-    // 2. Update User Preferences
-    const { error: profError } = await supabase.from('profiles').update({
-      sound_alerts: formData.sound_alerts,
-      push_notifications: formData.push_notifications
-    }).eq('id', profileId);
-    
-    if (compError || profError) {
-      const message = "Failed to save: " + (compError?.message || profError?.message);
+    try {
+      const { error: compError } = await supabase.from('companies').update({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address,
+      }).eq('id', company.id);
+      if (compError) throw compError;
+
+      const { error: profError } = await supabase.from('profiles').update({
+        sound_alerts: formData.sound_alerts,
+        push_notifications: formData.push_notifications,
+      }).eq('id', profileId);
+      if (profError) throw profError;
+
+      toast.success('Settings updated successfully!');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to save company settings. Please try again.';
       setSaveError(message);
       toast.error(message);
-    } else {
-      toast.success("Settings updated successfully!");
+    } finally {
+      setSaving(false);
     }
-    
-    setSaving(false);
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
