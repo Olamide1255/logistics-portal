@@ -160,4 +160,5 @@ Subscription billing and payment collection are intentionally deferred until the
 
 - Public SEO routes: `/robots.txt`, `/sitemap.xml`, `/opengraph-image`, `/twitter-image`, `/apple-icon`.
 - Public legal pages: `/privacy` and `/terms`.
-- Configure PostHog analytics/logging and Resend transactional email using [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+- PostHog analytics/logging is configured for production; see [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) for consent and verification details.
+- Resend is a future Supabase Auth SMTP transport and remains deferred until a verified sending domain is available. Public customer email onboarding is not production-ready until SMTP delivery is tested.
