@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, ArrowLeft, RefreshCw } from 'lucide-react';
 
@@ -7,9 +8,21 @@ type RouteErrorProps = {
   title: string;
   description: string;
   reset: () => void;
+  error?: Error & { digest?: string };
 };
 
-export function RouteError({ title, description, reset }: RouteErrorProps) {
+export function RouteError({ title, description, reset, error }: RouteErrorProps) {
+  useEffect(() => {
+    if (!error) return;
+    const path = window.location.pathname.startsWith('/track/') ? '/track/[token]' : window.location.pathname.startsWith('/dashboard/shipments/') ? '/dashboard/shipments/[awb]' : window.location.pathname;
+    void fetch('/api/monitoring/client-error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: error.message || 'React route error', stack: error.stack || '', path }),
+      keepalive: true,
+    }).catch(() => {});
+  }, [error]);
+
   return (
     <main className="flex min-h-[60vh] items-center justify-center px-4 py-12">
       <section role="alert" className="w-full max-w-xl rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-xl shadow-slate-900/5 sm:p-10">
