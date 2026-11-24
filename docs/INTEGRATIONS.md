@@ -10,7 +10,7 @@ Supabase Auth currently sends signup verification, invitations and password-rese
 2. In Supabase Dashboard, open **Authentication → SMTP Settings** and enable custom SMTP.
 3. Use Resend's SMTP endpoint `smtp.resend.com`, port `465` (recommended, implicit TLS) or `587` (STARTTLS), username `resend`, and the Resend API key as the SMTP password.
 4. Set the sender address to an address on the verified domain, for example `notifications@your-verified-domain`.
-5. Set the same sender identity in Supabase Auth, save, and send a test signup/invitation/reset email to an external mailbox.
+5. Keep email confirmation enabled and auto-confirm disabled in Supabase Auth; the workspace signup flow deliberately refuses to create an unverified public administrator. Set the same sender identity in Supabase Auth, save, and send a test signup/invitation/reset email to an external mailbox.
 6. Keep the API key in the Supabase SMTP password field only. Do not expose it through a `NEXT_PUBLIC_*` variable or commit it to Git.
 
 Supabase Auth remains responsible for generating and validating secure action links; Resend transports the email. This avoids creating a second password-reset or invitation-token system.
