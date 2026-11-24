@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 import Script from "next/script";
 import { Suspense } from "react";
 import { AnalyticsConsent } from "@/components/analytics-consent";
-import { ClientErrorReporter } from "@/components/client-error-reporter";
 import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://logistics-portal-ten.vercel.app";
@@ -45,7 +44,6 @@ export const viewport: Viewport = { themeColor: "#4f46e5" };
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="en"><body className={inter.className}>{children}
     <Suspense fallback={null}><AnalyticsConsent /></Suspense>
-    <ClientErrorReporter />
     <Script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" strategy="afterInteractive" />
     <Script id="onesignal-init" strategy="afterInteractive">{`
       window.OneSignalDeferred = window.OneSignalDeferred || [];
