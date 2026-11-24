@@ -160,4 +160,4 @@ Subscription billing and payment collection are intentionally deferred until the
 
 - Public SEO routes: `/robots.txt`, `/sitemap.xml`, `/opengraph-image`, `/twitter-image`, `/apple-icon`.
 - Public legal pages: `/privacy` and `/terms`.
-- Configure external providers and environment variables using [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+- Configure PostHog analytics/logging and Resend transactional email using [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
