@@ -154,3 +154,10 @@ The retired `/register` test route redirects to the authenticated shipment-regis
 ## Scope
 
 Subscription billing and payment collection are intentionally deferred until the non-billing product, security and workflow work is complete.
+
+
+## Website, privacy and integrations
+
+- Public SEO routes: `/robots.txt`, `/sitemap.xml`, `/opengraph-image`, `/twitter-image`, `/apple-icon`.
+- Public legal pages: `/privacy` and `/terms`.
+- Configure external providers and environment variables using [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
