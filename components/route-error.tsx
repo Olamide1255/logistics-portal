@@ -7,9 +7,17 @@ type RouteErrorProps = {
   title: string;
   description: string;
   reset: () => void;
+  backHref?: string;
+  backLabel?: string;
 };
 
-export function RouteError({ title, description, reset }: RouteErrorProps) {
+export function RouteError({
+  title,
+  description,
+  reset,
+  backHref = '/dashboard',
+  backLabel = 'Return to workspace',
+}: RouteErrorProps) {
   return (
     <main className="flex min-h-[60vh] items-center justify-center px-4 py-12">
       <section role="alert" className="w-full max-w-xl rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-xl shadow-slate-900/5 sm:p-10">
@@ -23,8 +31,8 @@ export function RouteError({ title, description, reset }: RouteErrorProps) {
           <button type="button" onClick={reset} className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/15 transition hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-500/20">
             <RefreshCw size={16} /> Try again
           </button>
-          <Link href="/dashboard" className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200">
-            <ArrowLeft size={16} /> Return to workspace
+          <Link href={backHref} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-slate-200">
+            <ArrowLeft size={16} /> {backLabel}
           </Link>
         </div>
       </section>
