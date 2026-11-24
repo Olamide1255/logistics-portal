@@ -18,3 +18,9 @@ body {
     padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
   }
 }
+
+.legal-content p { margin: 0 0 1rem; color: #475569; font-size: 0.95rem; line-height: 1.8; }
+.legal-content h2 { margin: 2rem 0 0.75rem; color: #0f172a; font-size: 1.2rem; font-weight: 800; letter-spacing: -0.02em; }
+.legal-content ul { margin: 0 0 1.25rem; padding-left: 1.5rem; list-style: disc; color: #475569; }
+.legal-content li { margin: 0.45rem 0; padding-left: 0.2rem; font-size: 0.95rem; line-height: 1.7; }
+.legal-content a { color: #4f46e5; text-decoration: underline; text-underline-offset: 2px; }
