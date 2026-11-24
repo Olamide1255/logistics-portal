@@ -25,7 +25,7 @@ Analytics are not loaded until a visitor accepts optional analytics cookies. Rej
 
 ## Sentry — error monitoring
 
-Set `SENTRY_DSN` as a server-only Vercel environment variable. The application reports Next.js request errors and sanitized browser errors to Sentry using its envelope endpoint. No authentication token or Sentry organization API token is needed at runtime. Configure the Sentry project alert rules in Sentry itself. Do not add a public DSN variable or send request cookies, headers, shipment details or financial data.
+Set `SENTRY_DSN` as a server-only Vercel environment variable. The application reports Next.js request errors and sanitized browser errors to Sentry using its envelope endpoint. No authentication token or Sentry organization API token is needed at runtime. Configure the Sentry project alert rules in Sentry itself. This dependency-free transport sends exception events and stack frames but does not upload source maps, so minified browser frames may not be symbolicated. Do not add a public DSN variable or send request cookies, headers, shipment details or financial data.
 
 ## Upstash Redis — distributed rate limiting
 
