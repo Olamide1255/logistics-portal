@@ -10,6 +10,7 @@ export default function CompanySettings() {
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [uploading, setUploading] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -76,8 +77,8 @@ export default function CompanySettings() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!company) return toast.error("No company data loaded.");
-    
+    if (!company) { setSaveError('No company data loaded. Refresh the page and try again.'); return; }
+    setSaveError('');
     setSaving(true);
     
     // 1. Update Company Info
@@ -95,7 +96,9 @@ export default function CompanySettings() {
     }).eq('id', profileId);
     
     if (compError || profError) {
-      toast.error("Failed to save: " + (compError?.message || profError?.message));
+      const message = "Failed to save: " + (compError?.message || profError?.message);
+      setSaveError(message);
+      toast.error(message);
     } else {
       toast.success("Settings updated successfully!");
     }
@@ -183,7 +186,7 @@ export default function CompanySettings() {
           <h2 className="text-lg font-bold text-slate-900 mb-4">Company Logo</h2>
           <div className="w-32 h-32 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden mb-4 relative group">
             {company?.logo_url ? (
-              <img src={company.logo_url} alt="Logo" className="w-full h-full object-contain p-2" />
+              <img src={company.logo_url} alt={`${company.name} company logo`} className="w-full h-full object-contain p-2" />
             ) : (
               <Upload className="text-slate-400" size={32} />
             )}
@@ -197,6 +200,7 @@ export default function CompanySettings() {
         {/* COMPANY DETAILS & PREFERENCES FORM */}
         <div className="md:col-span-2 bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
           <form onSubmit={handleSave} className="space-y-4">
+            {saveError && <p role="alert" aria-live="polite" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{saveError}</p>}
             <div>
               <label htmlFor="company-name" className="block text-xs font-bold text-slate-500 uppercase mb-1">Company Name</label>
               <input type="text" id="company-name" name="name" value={formData.name} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 font-medium" required />
