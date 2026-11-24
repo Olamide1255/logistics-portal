@@ -22,4 +22,4 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8; /* slate-400 */
-}
+}\n\n@media (max-width: 639px) {\n  .mobile-sticky-cta {\n    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));\n  }\n}\n
