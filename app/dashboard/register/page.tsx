@@ -1,4 +1,5 @@
 'use client';
+import { trackProductEvent } from '@/lib/product-analytics';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
@@ -95,6 +96,7 @@ export default function RegisterShipment() {
         shipment_awb: formData.awb_number
       }]);
 
+      trackProductEvent('shipment_created');
       setSuccess('Shipment registered successfully!');
       setFormData(initialFormState); 
       setTimeout(() => router.push('/dashboard/shipments'), 2000); 
