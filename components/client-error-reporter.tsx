@@ -12,7 +12,7 @@ export function ClientErrorReporter() {
       void fetch('/api/monitoring/client-error', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: clean(message), stack: clean(stack || ''), path: window.location.pathname.startsWith('/track/') ? '/track/[token]' : window.location.pathname }),
+        body: JSON.stringify({ message: clean(message), stack: clean(stack || ''), path: window.location.pathname.startsWith('/track/') ? '/track/[token]' : /^\\/dashboard\\/shipments\\/[^/]+/.test(window.location.pathname) ? '/dashboard/shipments/[awb]' : window.location.pathname }),
         keepalive: true,
       }).catch(() => {});
     };
