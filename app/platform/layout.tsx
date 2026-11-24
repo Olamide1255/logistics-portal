@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import PlatformShell from '@/components/platform-shell';
 
 export const metadata: Metadata = {
-  title: { default: 'Platform console', template: '%s' },
+  title: { default: 'Platform console', template: '%s | LogiFlow' },
   description: 'Private LogiFlow platform administration console.',
   robots: { index: false, follow: false, noarchive: true },
 };
