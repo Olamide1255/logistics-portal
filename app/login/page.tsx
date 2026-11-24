@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowRight, Loader2, ShieldCheck, Package, LockKeyhole } from 'lucide-react';
+import posthog from 'posthog-js';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -18,6 +19,9 @@ export default function Login() {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
       if (signInError) throw signInError;
       if (!data.user) throw new Error('We could not verify your account. Please try again.');
+      posthog.identify(data.user.id, {
+        ...(data.user.email ? { email: data.user.email } : {}),
+      });
       const { data: profile, error: profileError } = await supabase.from('profiles').select('is_platform_admin').eq('id', data.user.id).single();
       if (profileError) throw new Error('Your account is signed in, but its access profile could not be loaded. Please try again.');
       router.replace(profile?.is_platform_admin ? '/platform' : '/dashboard');

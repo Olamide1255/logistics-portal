@@ -8,6 +8,7 @@ import { queueAction, processQueue } from '@/lib/offlineSync';
 import { toast, Toaster } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import posthog from 'posthog-js';
 
 const MAX_SHIPMENT_DOCUMENT_SIZE = 10 * 1024 * 1024;
 
@@ -193,6 +194,11 @@ export default function ShipmentDetails() {
       });
       if (error) throw error;
 
+      posthog.capture('shipment_payment_recorded', {
+        payment_method: paymentMethod,
+        auto_approved: Boolean(paymentResult?.auto_approved),
+      });
+
       if (paymentResult?.auto_approved) {
         const messages = [
           {
@@ -315,6 +321,9 @@ export default function ShipmentDetails() {
       setDocuments((previous) => previous.some((doc) => doc.id === savedDocument.id)
         ? previous
         : [savedDocument, ...previous]);
+      posthog.capture('shipment_document_uploaded', {
+        file_type: matchingType.mimeType,
+      });
       toast.success('Document uploaded securely.');
     } catch (error: any) {
       if (uploadedFilePath) {
@@ -431,6 +440,11 @@ export default function ShipmentDetails() {
       });
       if (statusError) throw statusError;
 
+      posthog.capture('shipment_booked', {
+        shipment_type: shipment.shipment_type,
+        service_type: shipment.service_type,
+      });
+
       const { error: notificationError } = await supabase.from('notifications').insert([{
         role_target: 'ALL',
         title: 'Shipment Booked',
@@ -461,6 +475,11 @@ export default function ShipmentDetails() {
         p_status_notes: notesToApply,
       });
       if (statusError) throw statusError;
+
+      posthog.capture('shipment_status_updated', {
+        status: statusToApply,
+        previous_status: shipment.current_status,
+      });
 
       const { error: notificationError } = await supabase.from('notifications').insert([{
         role_target: 'ALL',
@@ -526,6 +545,9 @@ export default function ShipmentDetails() {
       setIsSubmitting(false);
       return;
     }
+    posthog.capture('shipment_deleted', {
+      status: shipment.current_status,
+    });
     router.push('/dashboard/shipments');
     router.refresh(); 
   };
@@ -578,6 +600,13 @@ export default function ShipmentDetails() {
       });
       if (updateError) throw updateError;
 
+      posthog.capture('shipment_updated', {
+        shipment_type: editFormData.shipment_type,
+        service_type: editFormData.service_type,
+        currency: editFormData.currency || 'NGN',
+        has_expected_delivery_date: Boolean(editFormData.expected_delivery_date),
+        has_payment_due_date: Boolean(editFormData.payment_due_date),
+      });
       toast.success('Shipment details and audit history updated.');
       setIsEditing(false);
       await fetchData();
@@ -598,6 +627,10 @@ export default function ShipmentDetails() {
         p_shipment_id: shipment.id,
       });
       if (approvalError) throw approvalError;
+
+      posthog.capture('shipment_payment_approved', {
+        previous_payment_status: shipment.payment_status,
+      });
 
       const messages = [
         {

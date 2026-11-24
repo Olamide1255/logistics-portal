@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { Package, PlusCircle, LogOut, LayoutDashboard, Menu, X, Bell, BellRing, Users, WifiOff, Plane, Settings, ShieldCheck, Loader2, BarChart3 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { processQueue } from '@/lib/offlineSync';
+import posthog from 'posthog-js';
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<string>('Loading...');
@@ -91,6 +92,12 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         .single();
       
       let role = profile?.role || 'Unknown';
+      posthog.identify(user.id, {
+        ...(user.email ? { email: user.email } : {}),
+        role,
+        ...(profile?.company_id ? { company_id: profile.company_id } : {}),
+        is_platform_admin: profile?.is_platform_admin === true,
+      });
       setUserRole(role);
       setIsPlatformAdmin(profile?.is_platform_admin || false);
       setUserPreferences({
@@ -109,7 +116,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         }
 
         if (companyStatus === 'Suspended' && !profile.is_platform_admin) {
-          await supabase.auth.signOut();
+          const { error: signOutError } = await supabase.auth.signOut();
+          if (!signOutError) posthog.reset();
           alert("Your company account has been suspended. Please contact support.");
           window.location.replace('/login');
           return;
@@ -125,7 +133,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         if (comp) {
           // Retain this check as a fallback if company-row visibility changes later.
           if (comp.status === 'Suspended' && !profile.is_platform_admin) {
-            await supabase.auth.signOut();
+            const { error: signOutError } = await supabase.auth.signOut();
+            if (!signOutError) posthog.reset();
             alert("Your company account has been suspended. Please contact support.");
             window.location.replace('/login');
             return;
@@ -260,6 +269,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+      posthog.reset();
       window.location.replace('/login');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Unable to sign out. Please try again.');

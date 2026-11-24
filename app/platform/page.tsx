@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { ShieldCheck, Plus, Building2, Loader2, Ban, CheckCircle, Package, Users, RefreshCw, Mail } from 'lucide-react';
 import { toast } from 'sonner';
+import posthog from 'posthog-js';
 
 type Company = {
   id: string;
@@ -98,6 +99,10 @@ export default function PlatformAdmin() {
       const inviteData = await res.json();
       if (!res.ok) throw new Error(inviteData.error || 'Unable to invite the company administrator. The company remains listed so you can retry safely.');
 
+      posthog.capture('company_onboarded', {
+        subscription_tier: 'Basic',
+        administrator_invited: true,
+      });
       toast.success(`Company created and invite sent to ${newAdminEmail.trim()}.`);
       setNewCompanyName('');
       setNewAdminEmail('');
@@ -140,6 +145,9 @@ export default function PlatformAdmin() {
     try {
       const { error } = await supabase.from('companies').update({ status: newStatus }).eq('id', companyId);
       if (error) throw error;
+      posthog.capture('company_status_updated', {
+        status: newStatus,
+      });
       toast.success(`Company ${newStatus === 'Active' ? 'reactivated' : 'suspended'}.`);
       setCompanies(current => current.map(c => c.id === companyId ? { ...c, status: newStatus } : c));
     } catch (error: unknown) {
@@ -153,6 +161,9 @@ export default function PlatformAdmin() {
     try {
       const { error } = await supabase.from('companies').update({ subscription_tier: newTier }).eq('id', companyId);
       if (error) throw error;
+      posthog.capture('company_subscription_updated', {
+        subscription_tier: newTier,
+      });
       toast.success(`Subscription changed to ${newTier}.`);
       setCompanies(current => current.map(c => c.id === companyId ? { ...c, subscription_tier: newTier } : c));
     } catch (error: unknown) {
