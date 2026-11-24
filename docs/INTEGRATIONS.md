@@ -13,7 +13,7 @@ Supabase Auth currently sends signup verification, invitations and password-rese
 5. Keep email confirmation enabled and auto-confirm disabled in Supabase Auth; the workspace signup flow deliberately refuses to create an unverified public administrator. Set the same sender identity in Supabase Auth, save, and send a test signup/invitation/reset email to an external mailbox.
 6. Keep the API key in the Supabase SMTP password field only. Do not expose it through a `NEXT_PUBLIC_*` variable or commit it to Git.
 
-Supabase Auth remains responsible for generating and validating secure action links; Resend transports the email. This avoids creating a second password-reset or invitation-token system.
+Supabase Auth remains responsible for generating and validating secure action links; Resend transports the email. This avoids creating a second password-reset or invitation-token system. Until custom SMTP is enabled and tested, do not treat external customer onboarding as ready: Supabase's default hosted mailer is restricted to project-team addresses and is rate-limited.
 
 ## PostHog — consent-aware product analytics
 
