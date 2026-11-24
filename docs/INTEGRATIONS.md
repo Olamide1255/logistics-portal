@@ -8,7 +8,7 @@ Supabase Auth currently sends signup verification, invitations and password-rese
 
 1. Add and verify a sending domain in Resend. Configure the SPF and DKIM records Resend provides; publish a DMARC policy for the domain.
 2. In Supabase Dashboard, open **Authentication → SMTP Settings** and enable custom SMTP.
-3. Use Resend's SMTP endpoint `smtp.resend.com`, port `465` (SSL) or `587` (STARTTLS), username `resend`, and the Resend API key as the SMTP password.
+3. Use Resend's SMTP endpoint `smtp.resend.com`, port `465` (recommended, implicit TLS) or `587` (STARTTLS), username `resend`, and the Resend API key as the SMTP password.
 4. Set the sender address to an address on the verified domain, for example `notifications@your-verified-domain`.
 5. Set the same sender identity in Supabase Auth, save, and send a test signup/invitation/reset email to an external mailbox.
 6. Keep the API key in the Supabase SMTP password field only. Do not expose it through a `NEXT_PUBLIC_*` variable or commit it to Git.
@@ -17,7 +17,7 @@ Supabase Auth remains responsible for generating and validating secure action li
 
 ## PostHog — consent-aware product analytics
 
-Set these Vercel Production and Preview environment variables (the project token is intended to be public):
+Set these Vercel Production and Preview environment variables (the project token is intended to be public). Also set `NEXT_PUBLIC_SITE_URL` to the canonical production origin (currently `https://logistics-portal-ten.vercel.app`) in Production; use the actual preview origin only when you specifically need preview canonical metadata:
 - `NEXT_PUBLIC_POSTHOG_KEY`: PostHog project token (`phc_...`).
 - `NEXT_PUBLIC_POSTHOG_HOST`: your PostHog ingestion host, e.g. `https://us.i.posthog.com` or your regional host.
 
