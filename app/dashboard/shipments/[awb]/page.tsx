@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams, useRouter } from 'next/navigation';
 import { CheckCircle, Clock, MessageSquare, Send, ArrowLeft, Edit, Trash2, Save, X, WifiOff, Plane, Anchor, Paperclip, Upload, FileText, Download, DollarSign, Plus, Share2 } from 'lucide-react';
@@ -55,7 +55,7 @@ export default function ShipmentDetails() {
     catch { toast.error('Could not copy the tracking link. Check browser clipboard permissions.'); }
   };
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setLoadError(false);
     setIsOnline(navigator.onLine);
@@ -132,16 +132,16 @@ export default function ShipmentDetails() {
     setDocuments(documentsResult.data || []);
     setPayments(paymentsResult.data || []);
     setLoading(false);
-  };
+  }, [awb]);
 
   useEffect(() => {
-    if (awb) fetchData();
+    if (awb) void fetchData();
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
-  }, [awb]);
+  }, [fetchData]);
 
   useEffect(() => {
     if (!shipment?.id) return;
