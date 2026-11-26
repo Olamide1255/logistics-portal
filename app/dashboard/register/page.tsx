@@ -12,6 +12,7 @@ export default function RegisterShipment() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
+  const [companyId, setCompanyId] = useState<string | null>(null);
 
   useEffect(() => {
     const checkRole = async () => {
@@ -23,7 +24,7 @@ export default function RegisterShipment() {
 
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .select('role, is_platform_admin')
+        .select('role, is_platform_admin, company_id')
         .eq('id', user.id)
         .single();
 
@@ -32,10 +33,12 @@ export default function RegisterShipment() {
         return;
       }
 
-      // Match the database shipments_insert policy. Email addresses are not
-      // an authorization source and must never grant operational permissions.
+      // Shipment registration is restricted to users assigned to a company.
+      const assignedCompanyId = profile.company_id ?? null;
+      setCompanyId(assignedCompanyId);
       setIsAuthorized(
-        profile.is_platform_admin === true ||
+        assignedCompanyId !== null &&
+        profile.is_platform_admin !== true &&
         ['Super Admin', 'Customer Service', 'Freight'].includes(profile.role)
       );
     };
@@ -65,18 +68,33 @@ export default function RegisterShipment() {
       if (existingShipment) throw new Error('A shipment with this AWB Number already exists!');
 
       let clientId;
-      const { data: existingClient } = await supabase.from('clients').select('id').ilike('client_name', formData.client_name).maybeSingle(); 
+      if (!companyId) throw new Error('Your account is not assigned to a company.');
+
+      const { data: existingClient, error: existingClientError } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('company_id', companyId)
+        .ilike('client_name', formData.client_name)
+        .maybeSingle();
+
+      if (existingClientError) throw existingClientError;
+
       if (existingClient) {
         clientId = existingClient.id;
       } else {
-        const { data: newClient, error: clientError } = await supabase.from('clients').insert([{ client_name: formData.client_name }]).select().single(); 
-        if (clientError) throw new Error(`Database Error: ${clientError.message}`); 
+        const { data: newClient, error: clientError } = await supabase
+          .from('clients')
+          .insert([{ client_name: formData.client_name, company_id: companyId }])
+          .select('id')
+          .single();
+
+        if (clientError) throw new Error(`Database Error: ${clientError.message}`);
         clientId = newClient.id;
       }
 
       const { error: shipmentError } = await supabase.from('shipments').insert([
         {
-          awb_number: formData.awb_number, client_id: clientId, shipment_type: formData.shipment_type,
+          awb_number: formData.awb_number, client_id: clientId, company_id: companyId, shipment_type: formData.shipment_type,
           service_type: formData.service_type, agreed_amount: formData.agreed_amount ? parseFloat(formData.agreed_amount) : null,
           rate: formData.rate ? parseFloat(formData.rate) : null, currency: formData.currency,
           sender_details: formData.sender_details, receiver_details: formData.receiver_details,
@@ -101,9 +119,9 @@ export default function RegisterShipment() {
       setFormData(initialFormState); 
       setTimeout(() => router.push('/dashboard/shipments'), 2000); 
 
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
+} catch (err: unknown) {
+  setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
+} finally {
       setLoading(false);
     }
   };
@@ -115,7 +133,7 @@ export default function RegisterShipment() {
       <div className="flex flex-col items-center justify-center h-[60vh] text-center px-4">
         <div className="bg-red-50 p-6 rounded-full mb-6"><ShieldAlert size={48} className="text-red-500" /></div>
         <h1 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h1>
-        <p className="text-slate-500 max-w-md mb-6">Only Customer Service, Freight, and Super Admins can register new shipments.</p>
+        <p className="text-slate-500 max-w-md mb-6">Only authorized users assigned to a company can register new shipments.</p>
         <Link href="/dashboard" className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-indigo-700 transition-colors">Return to Dashboard</Link>
       </div>
     );

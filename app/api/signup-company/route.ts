@@ -64,12 +64,12 @@ export async function POST(req: Request) {
     const supabasePublic = createClient(
       supabaseUrl,
       publicKey,
-      { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false } }
+      { auth: { autoRefreshToken: false, persistSession: false, detectSessionInUrl: false, flowType: 'implicit' } }
     );
 
     const defaultSiteUrl = process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://logistics-portal-ten.vercel.app';
     const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || defaultSiteUrl).replace(/\/+$/, '');
-    const redirectTo = `${siteUrl}/login`;
+    const redirectTo = `${siteUrl}/auth/callback`;
 
     // Public signUp sends the confirmation email. Do not use admin.createUser here:
     // the Admin API creates an unconfirmed user but does not send a confirmation email.

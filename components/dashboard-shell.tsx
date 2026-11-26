@@ -4,20 +4,45 @@ import { Suspense, useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Package, PlusCircle, LogOut, LayoutDashboard, Menu, X, Bell, BellRing, Users, WifiOff, Plane, Settings, ShieldCheck, Loader2, BarChart3 } from 'lucide-react';
+import Image from 'next/image';
+import { Package, PlusCircle, LogOut, LayoutDashboard, Menu, X, Bell, BellRing, Users, WifiOff, Settings, ShieldCheck, Loader2, BarChart3 } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 import { processQueue } from '@/lib/offlineSync';
+type NotificationRecord = {
+  id: string;
+  is_read: boolean | null;
+  shipment_awb: string | null;
+  title: string | null;
+  message: string | null;
+};
+
+type OneSignalInstance = {
+  User: {
+    addTag: (key: string, value: string) => Promise<void>;
+  };
+  Notifications: {
+    permission: boolean;
+    requestPermission: () => Promise<void>;
+  };
+};
+
+declare global {
+  interface Window {
+    OneSignalDeferred?: Array<
+      (oneSignal: OneSignalInstance) => void | Promise<void>
+    >;
+  }
+}
 
 function DashboardContent({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<string>('Loading...');
-  const [email, setEmail] = useState<string>('');
   const [userId, setUserId] = useState<string>('');
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [companyInfo, setCompanyInfo] = useState({ name: 'LogiFlow', logo_url: '/icon-192.png' });
   
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false); 
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   
@@ -72,7 +97,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       .or(`role_target.eq.${role},role_target.eq.ALL`)
       .order('created_at', { ascending: false })
       .limit(30);
-    if (data) setNotifications(data);
+    if (data) setNotifications(data as NotificationRecord[]);
   };
 
   useEffect(() => {
@@ -80,7 +105,6 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push('/login'); return; }
       
-      setEmail(user.email || '');
       setUserId(user.id);
       
       // 1. Fetch Profile
@@ -90,7 +114,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         .eq('id', user.id)
         .single();
       
-      let role = profile?.role || 'Unknown';
+      const role = profile?.role || 'Unknown';
       setUserRole(role);
       setIsPlatformAdmin(profile?.is_platform_admin || false);
       setUserPreferences({
@@ -150,8 +174,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
       // 3. OneSignal Tagging
       if (typeof window !== 'undefined') {
-        (window as any).OneSignalDeferred = (window as any).OneSignalDeferred || [];
-        (window as any).OneSignalDeferred.push(async function(OneSignal: any) {
+        const oneSignalDeferred = window.OneSignalDeferred ?? (window.OneSignalDeferred = []);
+        oneSignalDeferred.push(async (OneSignal) => {
           await OneSignal.User.addTag('role', role);
           if (profile?.company_id) {
             await OneSignal.User.addTag('company_id', profile.company_id);
@@ -173,7 +197,12 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
         if (payload.new.role_target !== userRole && payload.new.role_target !== 'ALL') return;
         
-        setNotifications((prev) => prev.some(n => n.id === payload.new.id) ? prev : [payload.new, ...prev]);
+        setNotifications((prev) => {
+          const incoming = payload.new as NotificationRecord;
+          return prev.some((notification) => notification.id === incoming.id)
+            ? prev
+            : [incoming, ...prev];
+        });
         
         // Respect User Preferences
         if (preferencesRef.current.sound_alerts) playNotificationSound();
@@ -221,7 +250,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         else if (currentVersion !== data.version) {
           toast.info("New Update Available", { description: "Please refresh.", duration: Infinity, action: { label: 'Update', onClick: () => window.location.reload() } });
         }
-      } catch (e) {}
+      } catch {}
     };
     checkVersion();
     const pollVersion = () => {
@@ -287,8 +316,8 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
   
   const requestPushPermission = async () => {
     if (typeof window !== 'undefined') {
-      (window as any).OneSignalDeferred = (window as any).OneSignalDeferred || [];
-      (window as any).OneSignalDeferred.push(async function(OneSignal: any) {
+      const oneSignalDeferred = window.OneSignalDeferred ?? (window.OneSignalDeferred = []);
+      oneSignalDeferred.push(async (OneSignal) => {
         await OneSignal.Notifications.requestPermission();
         if (Notification.permission === 'granted') { setPushEnabled(true); toast.success('Push enabled!'); }
       });
@@ -312,7 +341,17 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
       <aside id="dashboard-sidebar" aria-label="Workspace navigation" className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200/60 flex flex-col transform transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)]`}>
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <img src={companyInfo.logo_url} alt={companyInfo.name + " logo"} className="w-10 h-10 rounded-xl shadow-md object-contain bg-white" onError={(e) => { e.currentTarget.src = '/icon-192.png'; }} />
+            <Image
+              src={companyInfo.logo_url || '/icon-192.png'}
+              alt={`${companyInfo.name} logo`}
+              width={40}
+              height={40}
+              unoptimized
+              className="w-10 h-10 rounded-xl shadow-md object-contain bg-white"
+              onError={(event) => {
+                event.currentTarget.src = '/icon-192.png';
+              }}
+            />
             <div>
               <h1 className="text-lg font-bold text-slate-900 tracking-tight truncate max-w-37.5">{companyInfo.name}</h1>
               <div className="flex items-center gap-1 mt-1">
@@ -365,7 +404,7 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
         </nav>
         
         <div className="p-4 border-t border-slate-100">
-          <button type="button" onClick={handleLogout} disabled={isLoggingOut} aria-busy={isLoggingOut} className="flex items-center justify-center gap-2 p-2.5 w-full text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl font-medium text-sm disabled:cursor-wait disabled:opacity-60">{isLoggingOut ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />}{isLoggingOut ? 'Signing out…' : 'Sign out'}</button>
+          <button type="button" onClick={handleLogout} disabled={isLoggingOut} aria-busy={isLoggingOut} className="flex items-center justify-center gap-2 p-2.5 w-full text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-xl font-medium text-sm disabled:cursor-wait disabled:opacity-60">{isLoggingOut ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />}{isLoggingOut ? 'Signing outâ€¦' : 'Sign out'}</button>
         </div>
       </aside>
 

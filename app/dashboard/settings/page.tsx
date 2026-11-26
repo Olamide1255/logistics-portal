@@ -1,11 +1,22 @@
 'use client';
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Settings, Save, Upload, ShieldAlert, Bell, Volume2 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
+type CompanySettingsData = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  logo_url: string | null;
+  logo_path: string | null;
+};
+
 export default function CompanySettings() {
-  const [company, setCompany] = useState<any>(null);
+  const [company, setCompany] = useState<CompanySettingsData | null>(null);
   const [profileId, setProfileId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -31,7 +42,7 @@ export default function CompanySettings() {
         .eq('id', user.id)
         .single();
       
-      if (profile?.role !== 'Super Admin' && !profile?.is_platform_admin) {
+      if (profile?.is_platform_admin === true || profile?.role !== 'Super Admin' || !profile?.company_id) {
         setIsAuthorized(false);
         setLoading(false);
         return;
@@ -190,7 +201,14 @@ export default function CompanySettings() {
           <h2 className="text-lg font-bold text-slate-900 mb-4">Company Logo</h2>
           <div className="w-32 h-32 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden mb-4 relative group">
             {company?.logo_url ? (
-              <img src={company.logo_url} alt={`${company.name} company logo`} className="w-full h-full object-contain p-2" />
+              <Image
+  src={company.logo_url}
+  alt={`${company.name || 'Company'} company logo`}
+  fill
+  unoptimized
+  sizes="128px"
+  className="object-contain p-2"
+/>
             ) : (
               <Upload className="text-slate-400" size={32} />
             )}

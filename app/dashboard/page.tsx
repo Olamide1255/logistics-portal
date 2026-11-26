@@ -153,7 +153,7 @@ export default function Dashboard() {
 
       let queueQuery = supabase
         .from('shipments_secure')
-        .select('id, awb_number, shipment_type, current_status, payment_status, created_at, clients(client_name)')
+        .select('id, awb_number, shipment_type, current_status, payment_status, created_at, clients!shipments_client_company_fkey(client_name)')
         .order('created_at', { ascending: false })
         .limit(25);
 
