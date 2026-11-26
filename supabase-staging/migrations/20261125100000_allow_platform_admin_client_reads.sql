@@ -1,4 +1,4 @@
--- Keep client records tenant-scoped.
+﻿-- Keep client records tenant-scoped.
 -- Platform-wide reporting uses the dedicated platform overview RPC.
 DROP POLICY IF EXISTS clients_select ON public.clients;
 
