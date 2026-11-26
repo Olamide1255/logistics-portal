@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION public.enforce_company_billing_boundaries()
+﻿CREATE OR REPLACE FUNCTION public.enforce_company_billing_boundaries()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
