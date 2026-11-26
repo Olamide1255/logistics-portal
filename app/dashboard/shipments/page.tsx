@@ -120,7 +120,7 @@ export default function ShipmentsList() {
 
     let query = supabase
       .from('shipments_secure')
-      .select('id, awb_number, shipment_type, destination, current_status, payment_status, created_at, expected_delivery_date, clients!inner(client_name)', { count: 'exact' })
+      .select('id, awb_number, shipment_type, destination, current_status, payment_status, created_at, expected_delivery_date, clients!shipments_client_company_fkey!inner(client_name)', { count: 'exact' })
       .order('created_at', { ascending: false });
 
     const safeSearch = search.replace(/[(),%]/g, '').trim();
@@ -283,7 +283,7 @@ export default function ShipmentsList() {
             <tbody className="divide-y divide-slate-100">
               {!loading && loadError && (
                 <tr><td colSpan={9} className="px-6 py-12 text-center">
-                  <p className="font-semibold text-slate-800">We couldn't load the shipment register.</p>
+                  <p className="font-semibold text-slate-800">We couldn&apos;t load the shipment register.</p>
                   <p className="mt-1 text-sm text-slate-500">Check your connection and try again.</p>
                   <button onClick={() => void fetchShipments(0, searchTerm, statusFilter, paymentFilter, typeFilter)} className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700">Retry</button>
                 </td></tr>
@@ -307,7 +307,7 @@ export default function ShipmentsList() {
                       {shipment.shipment_type || 'Export'}
                     </span>
                   </td>
-                  <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-600">{shipment.destination || '—'}</td>
+                  <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-600">{shipment.destination || 'â€”'}</td>
                   <td className="whitespace-nowrap px-5 py-4">
                     <span className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${shipment.payment_status === 'Approved' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-amber-200'}`}>
                       {shipment.payment_status || 'Pending'}
@@ -322,7 +322,7 @@ export default function ShipmentsList() {
                   <td className="whitespace-nowrap px-5 py-4">
                     {(() => {
                       const delivery = deliveryDateLabel(shipment.expected_delivery_date, shipment.current_status);
-                      return <span className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${delivery.overdue ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{delivery.overdue ? 'Overdue · ' : ''}{delivery.label}</span>;
+                      return <span className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${delivery.overdue ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>{delivery.overdue ? 'Overdue Â· ' : ''}{delivery.label}</span>;
                     })()}
                   </td>
                   <td className="whitespace-nowrap px-5 py-4 text-xs text-slate-500">

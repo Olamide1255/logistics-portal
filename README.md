@@ -154,3 +154,11 @@ The retired `/register` test route redirects to the authenticated shipment-regis
 ## Scope
 
 Subscription billing and payment collection are intentionally deferred until the non-billing product, security and workflow work is complete.
+
+
+## Website, privacy and integrations
+
+- Public SEO routes: `/robots.txt`, `/sitemap.xml`, `/opengraph-image`, `/twitter-image`, `/apple-icon`.
+- Public legal pages: `/privacy` and `/terms`.
+- PostHog analytics/logging is configured for production; see [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) for consent and verification details.
+- Resend is a future Supabase Auth SMTP transport and remains deferred until a verified sending domain is available. Public customer email onboarding is not production-ready until SMTP delivery is tested.

@@ -1,4 +1,8 @@
-export const exportToCSV = (data: any[], filename: string, columns: { key: string, label: string }[]) => {
+export const exportToCSV = <T extends Record<string, unknown>>(
+  data: T[],
+  filename: string,
+  columns: { key: keyof T & string; label: string }[],
+) => {
   if (data.length === 0) return;
 
   // Create header row

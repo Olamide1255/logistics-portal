@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ChangeEvent } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useParams, useRouter } from 'next/navigation';
 import { CheckCircle, Clock, MessageSquare, Send, ArrowLeft, Edit, Trash2, Save, X, WifiOff, Plane, Anchor, Paperclip, Upload, FileText, Download, DollarSign, Plus, Share2 } from 'lucide-react';
@@ -11,6 +11,70 @@ import autoTable from 'jspdf-autotable';
 
 const MAX_SHIPMENT_DOCUMENT_SIZE = 10 * 1024 * 1024;
 
+type ShipmentRecord = {
+  id: string;
+  company_id: string | null;
+  awb_number: string;
+  tracking_token: string | null;
+  clients: { client_name: string | null } | null;
+  shipment_type: string;
+  service_type: string | null;
+  payment_status: string;
+  current_status: string;
+  sender_details: string | null;
+  receiver_details: string | null;
+  origin: string | null;
+  destination: string | null;
+  weight: number | string;
+  dimensions: string | null;
+  commodity_type: string | null;
+  agreed_amount: number | string | null;
+  rate: number | string | null;
+  currency: string | null;
+  expected_delivery_date: string | null;
+  payment_due_date: string | null;
+  delivered_at: string | null;
+};
+
+type ShipmentTimelineRecord = {
+  id: string;
+  status_dropdown: string;
+  status_notes: string | null;
+  action_by_name: string | null;
+  created_at: string;
+  isOptimistic?: boolean;
+};
+
+type ShipmentCommentRecord = {
+  id: string;
+  comment_text: string;
+  action_by_name: string;
+  created_at: string;
+  updated_by_role?: string;
+  isOptimistic?: boolean;
+};
+
+type ShipmentDocumentRecord = {
+  id: string;
+  file_name: string;
+  file_path: string | null;
+  file_url: string | null;
+  uploaded_by: string;
+  created_at: string;
+};
+
+type ShipmentPaymentRecord = {
+  id: string;
+  amount: number | string;
+  currency: string;
+  payment_method: string;
+  reference: string | null;
+  recorded_by: string;
+  created_at: string;
+};
+
+type ShipmentEditForm = Partial<ShipmentRecord>;
+
 export default function ShipmentDetails() {
   const params = useParams();
   const router = useRouter();
@@ -18,11 +82,11 @@ export default function ShipmentDetails() {
   const rawAwb = params.awb as string;
   const awb = decodeURIComponent(rawAwb).trim();
 
-  const [shipment, setShipment] = useState<any>(null);
-  const [timeline, setTimeline] = useState<any[]>([]);
-  const [comments, setComments] = useState<any[]>([]);
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [payments, setPayments] = useState<any[]>([]);
+const [shipment, setShipment] = useState<ShipmentRecord | null>(null);
+const [timeline, setTimeline] = useState<ShipmentTimelineRecord[]>([]);
+const [comments, setComments] = useState<ShipmentCommentRecord[]>([]);
+const [documents, setDocuments] = useState<ShipmentDocumentRecord[]>([]);
+const [payments, setPayments] = useState<ShipmentPaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [userRole, setUserRole] = useState<string>('');
@@ -32,7 +96,7 @@ export default function ShipmentDetails() {
   const [companyName, setCompanyName] = useState('LogiFlow');
 
   const [isEditing, setIsEditing] = useState(false);
-  const [editFormData, setEditFormData] = useState<any>({});
+  const [editFormData, setEditFormData] = useState<ShipmentEditForm>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [newStatus, setNewStatus] = useState('');
@@ -55,7 +119,7 @@ export default function ShipmentDetails() {
     catch { toast.error('Could not copy the tracking link. Check browser clipboard permissions.'); }
   };
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setLoadError(false);
     setIsOnline(navigator.onLine);
@@ -132,45 +196,97 @@ export default function ShipmentDetails() {
     setDocuments(documentsResult.data || []);
     setPayments(paymentsResult.data || []);
     setLoading(false);
-  };
+  }, [awb]);
 
   useEffect(() => {
-    if (awb) fetchData();
+    if (awb) void fetchData();
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
-  }, [awb]);
+}, [fetchData, awb]);
+
+  const shipmentId = shipment?.id;
 
   useEffect(() => {
-    if (!shipment?.id) return;
+    if (!shipmentId) return;
+
     const channel = supabase
-      .channel(`shipment_${shipment.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shipment_comments', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
-        setComments((prev) => prev.some(c => c.id === payload.new.id) ? prev : [...prev.filter(c => !c.isOptimistic), payload.new]);
+      .channel(`shipment_${shipmentId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'shipment_comments',
+        filter: `shipment_id=eq.${shipmentId}`,
+      }, (payload) => {
+        const incoming = payload.new as ShipmentCommentRecord;
+        setComments((prev) =>
+          prev.some((c) => c.id === incoming.id)
+            ? prev
+            : [...prev.filter((c) => !c.isOptimistic), incoming]
+        );
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shipment_timeline', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
-        setTimeline((prev) => prev.some(t => t.id === payload.new.id) ? prev : [payload.new, ...prev.filter(t => !t.isOptimistic)]);
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'shipment_timeline',
+        filter: `shipment_id=eq.${shipmentId}`,
+      }, (payload) => {
+        const incoming = payload.new as ShipmentTimelineRecord;
+        setTimeline((prev) =>
+          prev.some((t) => t.id === incoming.id)
+            ? prev
+            : [incoming, ...prev.filter((t) => !t.isOptimistic)]
+        );
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'shipment_documents', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
-        setDocuments((prev) => prev.some((doc) => doc.id === payload.new.id) ? prev : [payload.new, ...prev]);
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'shipment_documents',
+        filter: `shipment_id=eq.${shipmentId}`,
+      }, (payload) => {
+        const incoming = payload.new as ShipmentDocumentRecord;
+        setDocuments((prev) =>
+          prev.some((doc) => doc.id === incoming.id)
+            ? prev
+            : [incoming, ...prev]
+        );
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'payments', filter: `shipment_id=eq.${shipment.id}` }, (payload) => {
-        setPayments((prev) => [payload.new, ...prev]);
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'payments',
+        filter: `shipment_id=eq.${shipmentId}`,
+      }, (payload) => {
+        const incoming = payload.new as ShipmentPaymentRecord;
+        setPayments((prev) =>
+          prev.some((p) => p.id === incoming.id)
+            ? prev
+            : [incoming, ...prev]
+        );
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'shipments', filter: `id=eq.${shipment.id}` }, (payload) => {
-        setShipment((prev: any) => ({ ...prev, ...payload.new }));
-      }).subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [shipment?.id]);
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'shipments',
+        filter: `id=eq.${shipmentId}`,
+      }, (payload) => {
+        setShipment((prev) => prev ? { ...prev, ...payload.new } : prev);
+      })
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [shipmentId]);
 
   // Calculate Financials
-  const agreedAmount = parseFloat(shipment?.agreed_amount || '0');
-  const totalPaid = payments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+  const agreedAmount = parseFloat(String(shipment?.agreed_amount ?? 0));
+  const totalPaid = payments.reduce((sum, p) => sum + parseFloat(String(p.amount)), 0);
   const balance = agreedAmount - totalPaid;
 
-  const handleRecordPayment = async (e: React.FormEvent) => {
+  const handleRecordPayment = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const amount = Number(paymentAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
@@ -186,7 +302,7 @@ export default function ShipmentDetails() {
 
     try {
       const { data: paymentResult, error } = await supabase.rpc('record_shipment_payment', {
-        p_shipment_id: shipment.id,
+        p_shipment_id: shipment!.id,
         p_amount: amount,
         p_payment_method: paymentMethod,
         p_reference: paymentRef.trim() || null,
@@ -198,14 +314,14 @@ export default function ShipmentDetails() {
           {
             role_target: 'Freight',
             title: 'Action Needed: Book Shipment',
-            message: `Finance (${actionBy}) recorded full payment for AWB ${shipment.awb_number}. Please book space.`,
-            shipment_awb: shipment.awb_number,
+            message: `Finance (${actionBy}) recorded full payment for AWB ${shipment!.awb_number}. Please book space.`,
+            shipment_awb: shipment!.awb_number,
           },
           {
             role_target: 'Customer Service',
             title: 'Payment Approved',
-            message: `Finance (${actionBy}) recorded full payment for AWB ${shipment.awb_number}. Awaiting Freight booking.`,
-            shipment_awb: shipment.awb_number,
+            message: `Finance (${actionBy}) recorded full payment for AWB ${shipment!.awb_number}. Awaiting Freight booking.`,
+            shipment_awb: shipment!.awb_number,
           },
         ];
         const { error: notificationError } = await supabase.from('notifications').insert(messages);
@@ -229,7 +345,7 @@ export default function ShipmentDetails() {
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -279,7 +395,7 @@ export default function ShipmentDetails() {
         throw new Error('You do not have permission to upload documents for this shipment.');
       }
 
-      const filePath = `${profile.company_id}/${shipment.id}/${crypto.randomUUID()}.${fileExtension}`;
+      const filePath = `${profile.company_id}/${shipment!.id}/${crypto.randomUUID()}.${fileExtension}`;
       const { error: uploadError } = await supabase.storage
         .from('shipment-documents')
         .upload(filePath, file, {
@@ -295,7 +411,7 @@ export default function ShipmentDetails() {
       const { data: savedDocument, error: dbError } = await supabase
         .from('shipment_documents')
         .insert([{
-          shipment_id: shipment.id,
+          shipment_id: shipment!.id,
           company_id: profile.company_id,
           file_name: file.name,
           file_path: filePath,
@@ -316,19 +432,27 @@ export default function ShipmentDetails() {
         ? previous
         : [savedDocument, ...previous]);
       toast.success('Document uploaded securely.');
-    } catch (error: any) {
+    } catch (error) {
       if (uploadedFilePath) {
-        const { error: cleanupError } = await supabase.storage.from('shipment-documents').remove([uploadedFilePath]);
-        if (cleanupError) console.error('Failed to clean up uploaded shipment document:', cleanupError);
+        const { error: cleanupError } = await supabase.storage
+          .from('shipment-documents')
+          .remove([uploadedFilePath]);
+
+        if (cleanupError) {
+          console.error('Failed to clean up uploaded shipment document:', cleanupError);
+        }
       }
-      toast.error(`Document upload failed: ${error?.message || 'Unexpected error'}`);
+
+      toast.error(
+        `Document upload failed: ${error instanceof Error ? error.message : 'Unexpected error'}`
+      );
     } finally {
-      setUploading(false);
+            setUploading(false);
       e.target.value = '';
     }
   };
 
-  const handleOpenDocument = async (document: any) => {
+  const handleOpenDocument = async (document: ShipmentDocumentRecord) => {
     // Open a blank tab synchronously so browser popup blockers do not discard the user action.
     const newWindow = window.open('about:blank', '_blank');
     try {
@@ -364,10 +488,12 @@ export default function ShipmentDetails() {
 
       if (newWindow) newWindow.location.href = data.signedUrl;
       else window.location.assign(data.signedUrl);
-    } catch (error: any) {
-      newWindow?.close();
-      toast.error(`Could not open document: ${error?.message || 'Unexpected error'}`);
-    }
+} catch (error) {
+  newWindow?.close();
+  toast.error(
+    `Could not open document: ${error instanceof Error ? error.message : 'Unexpected error'}`
+  );
+}
   };
 
   const generatePDF = () => {
@@ -381,17 +507,17 @@ export default function ShipmentDetails() {
     
     doc.setFontSize(12);
     doc.setTextColor(0);
-    doc.text(`AWB Number: ${shipment.awb_number}`, 14, 45);
-    doc.text(`Client: ${shipment.clients?.client_name}`, 14, 52);
-    doc.text(`Type: ${shipment.shipment_type} (${shipment.service_type})`, 14, 59);
+    doc.text(`AWB Number: ${shipment!.awb_number}`, 14, 45);
+    doc.text(`Client: ${shipment!.clients?.client_name}`, 14, 52);
+    doc.text(`Type: ${shipment!.shipment_type} (${shipment!.service_type})`, 14, 59);
     
     const tableData = [
-      ["Sender", shipment.sender_details],
-      ["Receiver", shipment.receiver_details],
-      ["Origin", shipment.origin],
-      ["Destination", shipment.destination],
-      ["Commodity", shipment.commodity_type],
-      ["Weight / Dims", `${shipment.weight} kg / ${shipment.dimensions}`],
+      ["Sender", shipment!.sender_details],
+      ["Receiver", shipment!.receiver_details],
+      ["Origin", shipment!.origin],
+      ["Destination", shipment!.destination],
+      ["Commodity", shipment!.commodity_type],
+      ["Weight / Dims", `${shipment!.weight} kg / ${shipment!.dimensions}`],
     ];
 
     autoTable(doc, {
@@ -402,21 +528,21 @@ export default function ShipmentDetails() {
       headStyles: { fillColor: [79, 70, 229] },
     });
 
-    if (shipment.agreed_amount) {
+    if (shipment!.agreed_amount) {
       autoTable(doc, {
-        startY: (doc as any).lastAutoTable.finalY + 10,
+        startY: ((doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? 70) + 10,
         head: [['Financials', 'Amount']],
         body: [
-          ["Agreed Amount", `${shipment.currency} ${agreedAmount.toLocaleString()}`],
-          ["Total Paid", `${shipment.currency} ${totalPaid.toLocaleString()}`],
-          ["Outstanding Balance", `${shipment.currency} ${balance.toLocaleString()}`]
+          ["Agreed Amount", `${shipment!.currency} ${agreedAmount.toLocaleString()}`],
+          ["Total Paid", `${shipment!.currency} ${totalPaid.toLocaleString()}`],
+          ["Outstanding Balance", `${shipment!.currency} ${balance.toLocaleString()}`]
         ],
         theme: 'grid',
         headStyles: { fillColor: [16, 185, 129] }, 
       });
     }
 
-    doc.save(`Manifest_${shipment.awb_number}.pdf`);
+    doc.save(`Manifest_${shipment!.awb_number}.pdf`);
     toast.success("PDF Downloaded successfully");
   };
 
@@ -425,7 +551,7 @@ export default function ShipmentDetails() {
     setIsSubmitting(true);
     try {
       const { error: statusError } = await supabase.rpc('apply_shipment_status_with_timeline', {
-        p_shipment_id: shipment.id,
+        p_shipment_id: shipment!.id,
         p_status: 'Booked',
         p_status_notes: 'Freight space secured.',
       });
@@ -434,8 +560,8 @@ export default function ShipmentDetails() {
       const { error: notificationError } = await supabase.from('notifications').insert([{
         role_target: 'ALL',
         title: 'Shipment Booked',
-        message: `Freight (${actionBy}) booked space for AWB ${shipment.awb_number}. Ready for RFS pickup.`,
-        shipment_awb: shipment.awb_number,
+        message: `Freight (${actionBy}) booked space for AWB ${shipment!.awb_number}. Ready for RFS pickup.`,
+        shipment_awb: shipment!.awb_number,
       }]);
       if (notificationError) toast.warning('Shipment booked, but the team notification could not be created.');
 
@@ -456,7 +582,7 @@ export default function ShipmentDetails() {
       // Status and timeline writes commit together; a failed milestone cannot
       // leave the shipment status changed without its audit trail.
       const { error: statusError } = await supabase.rpc('apply_shipment_status_with_timeline', {
-        p_shipment_id: shipment.id,
+        p_shipment_id: shipment!.id,
         p_status: statusToApply,
         p_status_notes: notesToApply,
       });
@@ -465,8 +591,8 @@ export default function ShipmentDetails() {
       const { error: notificationError } = await supabase.from('notifications').insert([{
         role_target: 'ALL',
         title: `Shipment Update: ${statusToApply}`,
-        message: `${userRole} (${actionBy}) updated AWB ${shipment.awb_number} to: ${statusToApply}.`,
-        shipment_awb: shipment.awb_number,
+        message: `${userRole} (${actionBy}) updated AWB ${shipment!.awb_number} to: ${statusToApply}.`,
+        shipment_awb: shipment!.awb_number,
       }]);
       if (notificationError) toast.warning('Status and timeline saved, but the team notification could not be created.');
 
@@ -481,7 +607,7 @@ export default function ShipmentDetails() {
     }
   };
 
-  const handleAddComment = async (e: React.FormEvent) => {
+  const handleAddComment = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!newComment || !commentBy) return;
     const tempId = `temp-${Date.now()}`;
@@ -489,7 +615,7 @@ export default function ShipmentDetails() {
     const savedComment = newComment; const savedCommentBy = commentBy; setNewComment('');
     try {
       if (!navigator.onLine) throw new Error("Offline");
-      const { data, error } = await supabase.from('shipment_comments').insert([{ shipment_id: shipment.id, comment_text: savedComment, updated_by_role: userRole, action_by_name: savedCommentBy }]).select().single();
+      const { data, error } = await supabase.from('shipment_comments').insert([{ shipment_id: shipment!.id, comment_text: savedComment, updated_by_role: userRole, action_by_name: savedCommentBy }]).select().single();
       if (error) throw error;
       setComments(prev => prev.map(c => c.id === tempId ? data : c));
     } catch (error) {
@@ -505,7 +631,7 @@ export default function ShipmentDetails() {
 
       try {
         await queueAction('shipment_comments', 'INSERT', {
-          shipment_id: shipment.id,
+          shipment_id: shipment!.id,
           comment_text: savedComment,
           updated_by_role: userRole,
           action_by_name: savedCommentBy,
@@ -520,7 +646,7 @@ export default function ShipmentDetails() {
   const handleDelete = async () => {
     if (!window.confirm(`Delete shipment ${awb}?`)) return;
     setIsSubmitting(true);
-    const { error } = await supabase.from('shipments').delete().eq('id', shipment.id);
+    const { error } = await supabase.from('shipments').delete().eq('id', shipment!.id);
     if (error) {
       toast.error(error.message);
       setIsSubmitting(false);
@@ -530,7 +656,7 @@ export default function ShipmentDetails() {
     router.refresh(); 
   };
 
-  const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleEditChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setEditFormData({ ...editFormData, [e.target.name]: e.target.value });
   };
 
@@ -560,7 +686,7 @@ export default function ShipmentDetails() {
     try {
       // The shipment update and its audit timeline entry commit together.
       const { error: updateError } = await supabase.rpc('update_shipment_details_with_timeline', {
-        p_shipment_id: shipment.id,
+        p_shipment_id: shipment!.id,
         p_sender_details: editFormData.sender_details,
         p_receiver_details: editFormData.receiver_details,
         p_weight: weight,
@@ -595,7 +721,7 @@ export default function ShipmentDetails() {
     try {
       // Approval and its finance timeline event are one atomic database action.
       const { error: approvalError } = await supabase.rpc('approve_shipment_payment_with_timeline', {
-        p_shipment_id: shipment.id,
+        p_shipment_id: shipment!.id,
       });
       if (approvalError) throw approvalError;
 
@@ -603,14 +729,14 @@ export default function ShipmentDetails() {
         {
           role_target: 'Freight',
           title: 'Action Needed: Book Shipment',
-          message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}. Please book space.`,
-          shipment_awb: shipment.awb_number,
+          message: `Finance (${actionBy}) approved AWB ${shipment!.awb_number}. Please book space.`,
+          shipment_awb: shipment!.awb_number,
         },
         {
           role_target: 'Customer Service',
           title: 'Payment Approved',
-          message: `Finance (${actionBy}) approved AWB ${shipment.awb_number}. Awaiting Freight booking.`,
-          shipment_awb: shipment.awb_number,
+          message: `Finance (${actionBy}) approved AWB ${shipment!.awb_number}. Awaiting Freight booking.`,
+          shipment_awb: shipment!.awb_number,
         },
       ];
       const { error: notificationError } = await supabase.from('notifications').insert(messages);
@@ -625,7 +751,7 @@ export default function ShipmentDetails() {
     }
   };
 
-  if (loading) return <div className="mx-auto max-w-5xl p-10 text-center text-sm font-medium text-slate-500" role="status">Loading shipment workspace…</div>;
+  if (loading) return <div className="mx-auto max-w-5xl p-10 text-center text-sm font-medium text-slate-500" role="status">Loading shipment workspaceâ€¦</div>;
   if (loadError) return (
     <div className="mx-auto max-w-xl rounded-2xl border border-rose-200 bg-white p-8 text-center shadow-sm">
       <p className="font-semibold text-slate-900">We couldn&apos;t load this shipment.</p>
@@ -682,14 +808,14 @@ export default function ShipmentDetails() {
 
       <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm ring-1 ring-slate-200/60 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">AWB: {shipment.awb_number}</h1>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">AWB: {shipment!.awb_number}</h1>
           <div className="flex flex-wrap items-center gap-3 mt-2">
-            <p className="text-slate-500 text-lg font-medium">Client: <span className="font-bold text-slate-800">{shipment.clients?.client_name}</span></p>
-            <span className={`px-3 py-1 rounded-full text-xs font-bold ring-1 ring-inset flex items-center gap-1 ${shipment.shipment_type === 'Import' ? 'bg-blue-50 text-blue-700 ring-blue-200' : 'bg-orange-50 text-orange-700 ring-orange-200'}`}>
-              {shipment.shipment_type === 'Import' ? <Anchor size={12} /> : <Plane size={12} />} {shipment.shipment_type}
+            <p className="text-slate-500 text-lg font-medium">Client: <span className="font-bold text-slate-800">{shipment!.clients?.client_name}</span></p>
+            <span className={`px-3 py-1 rounded-full text-xs font-bold ring-1 ring-inset flex items-center gap-1 ${shipment!.shipment_type === 'Import' ? 'bg-blue-50 text-blue-700 ring-blue-200' : 'bg-orange-50 text-orange-700 ring-orange-200'}`}>
+              {shipment!.shipment_type === 'Import' ? <Anchor size={12} /> : <Plane size={12} />} {shipment!.shipment_type}
             </span>
             <span className="px-3 py-1 rounded-full text-xs font-bold ring-1 ring-inset bg-slate-50 text-slate-700 ring-slate-200">
-              {shipment.service_type || 'DDP'}
+              {shipment!.service_type || 'DDP'}
             </span>
           </div>
         </div>
@@ -697,11 +823,11 @@ export default function ShipmentDetails() {
           <button type="button" onClick={copyTrackingLink} disabled={!trackingToken} className="px-4 py-2 rounded-xl font-bold text-sm inline-flex items-center justify-center gap-2 bg-indigo-600 text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors">
             <Share2 size={15} /> Share customer tracking
           </button>
-          <div className={`px-4 py-2 rounded-xl font-bold text-sm inline-flex items-center gap-2 ring-1 ring-inset ${shipment.payment_status === 'Approved' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-amber-200'}`}>
-            <span className={`w-2 h-2 rounded-full ${shipment.payment_status === 'Approved' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span> Payment: {shipment.payment_status}
+          <div className={`px-4 py-2 rounded-xl font-bold text-sm inline-flex items-center gap-2 ring-1 ring-inset ${shipment!.payment_status === 'Approved' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-amber-200'}`}>
+            <span className={`w-2 h-2 rounded-full ${shipment!.payment_status === 'Approved' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span> Payment: {shipment!.payment_status}
           </div>
           <div className="px-4 py-2 rounded-xl font-bold text-sm inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200">
-            <span className="w-2 h-2 rounded-full bg-indigo-500"></span> Status: {shipment.current_status}
+            <span className="w-2 h-2 rounded-full bg-indigo-500"></span> Status: {shipment!.current_status}
           </div>
         </div>
       </div>
@@ -732,20 +858,20 @@ export default function ShipmentDetails() {
                 </>
               ) : (
                 <>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Sender</span> <span className="text-slate-900 font-semibold">{shipment.sender_details}</span></div>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Receiver</span> <span className="text-slate-900 font-semibold">{shipment.receiver_details}</span></div>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Origin</span> <span className="text-slate-900 font-semibold">{shipment.origin}</span></div>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Destination</span> <span className="text-slate-900 font-semibold">{shipment.destination}</span></div>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Commodity</span> <span className="text-slate-900 font-semibold">{shipment.commodity_type}</span></div>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Weight / Dims</span> <span className="text-slate-900 font-semibold">{shipment.weight} kg / {shipment.dimensions}</span></div>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Expected Delivery</span> <span className="text-slate-900 font-semibold">{shipment.expected_delivery_date ? new Date(`${shipment.expected_delivery_date}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' }) : 'Not set'}</span></div>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Payment Due</span> <span className="text-slate-900 font-semibold">{shipment.payment_due_date ? new Date(`${shipment.payment_due_date}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' }) : 'Not set'}</span></div>
-                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Delivered At</span> <span className="text-slate-900 font-semibold">{shipment.delivered_at ? new Date(shipment.delivered_at).toLocaleString('en-GB', { timeZone: 'Africa/Lagos' }) : 'Not recorded'}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Sender</span> <span className="text-slate-900 font-semibold">{shipment!.sender_details}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Receiver</span> <span className="text-slate-900 font-semibold">{shipment!.receiver_details}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Origin</span> <span className="text-slate-900 font-semibold">{shipment!.origin}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Destination</span> <span className="text-slate-900 font-semibold">{shipment!.destination}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Commodity</span> <span className="text-slate-900 font-semibold">{shipment!.commodity_type}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Weight / Dims</span> <span className="text-slate-900 font-semibold">{shipment!.weight} kg / {shipment!.dimensions}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Expected Delivery</span> <span className="text-slate-900 font-semibold">{shipment!.expected_delivery_date ? new Date(`${shipment!.expected_delivery_date}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' }) : 'Not set'}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Payment Due</span> <span className="text-slate-900 font-semibold">{shipment!.payment_due_date ? new Date(`${shipment!.payment_due_date}T00:00:00Z`).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' }) : 'Not set'}</span></div>
+                  <div><span className="text-xs font-bold text-slate-400 uppercase block mb-1">Delivered At</span> <span className="text-slate-900 font-semibold">{shipment!.delivered_at ? new Date(shipment!.delivered_at).toLocaleString('en-GB', { timeZone: 'Africa/Lagos' }) : 'Not recorded'}</span></div>
                   
                   {canSeeFinancials && (
                     <div className="md:col-span-2 grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mt-2">
-                      <div><span className="text-xs font-bold text-slate-500 uppercase block mb-1">Rate</span><span className="text-lg font-extrabold text-slate-800">{shipment.rate ? parseFloat(shipment.rate).toLocaleString() : '—'}</span></div>
-                      <div><span className="text-xs font-bold text-slate-500 uppercase block mb-1">Agreed Amount</span><span className="text-lg font-extrabold text-emerald-600">{shipment.currency || 'NGN'} {shipment.agreed_amount ? parseFloat(shipment.agreed_amount).toLocaleString() : '0.00'}</span></div>
+                      <div><span className="text-xs font-bold text-slate-500 uppercase block mb-1">Rate</span><span className="text-lg font-extrabold text-slate-800">{shipment!.rate ? parseFloat(String(shipment!.rate)).toLocaleString() : 'â€”'}</span></div>
+                      <div><span className="text-xs font-bold text-slate-500 uppercase block mb-1">Agreed Amount</span><span className="text-lg font-extrabold text-emerald-600">{shipment!.currency || 'NGN'} {shipment!.agreed_amount ? parseFloat(String(shipment!.agreed_amount)).toLocaleString() : '0.00'}</span></div>
                     </div>
                   )}
                 </>
@@ -768,15 +894,15 @@ export default function ShipmentDetails() {
               <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                   <p className="text-xs font-bold text-slate-500 uppercase mb-1">Agreed Amount</p>
-                  <p className="text-lg font-extrabold text-slate-900">{shipment.currency} {agreedAmount.toLocaleString()}</p>
+                  <p className="text-lg font-extrabold text-slate-900">{shipment!.currency} {agreedAmount.toLocaleString()}</p>
                 </div>
                 <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200">
                   <p className="text-xs font-bold text-emerald-700 uppercase mb-1">Total Paid</p>
-                  <p className="text-lg font-extrabold text-emerald-700">{shipment.currency} {totalPaid.toLocaleString()}</p>
+                  <p className="text-lg font-extrabold text-emerald-700">{shipment!.currency} {totalPaid.toLocaleString()}</p>
                 </div>
                 <div className={`p-4 rounded-xl border ${balance > 0 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
                   <p className={`text-xs font-bold uppercase mb-1 ${balance > 0 ? 'text-amber-700' : 'text-slate-500'}`}>Outstanding</p>
-                  <p className={`text-lg font-extrabold ${balance > 0 ? 'text-amber-700' : 'text-slate-900'}`}>{shipment.currency} {balance.toLocaleString()}</p>
+                  <p className={`text-lg font-extrabold ${balance > 0 ? 'text-amber-700' : 'text-slate-900'}`}>{shipment!.currency} {balance.toLocaleString()}</p>
                 </div>
               </div>
 
@@ -786,8 +912,8 @@ export default function ShipmentDetails() {
                 {payments.map(p => (
                   <div key={p.id} className="flex flex-col gap-2 rounded-xl border border-slate-100 bg-slate-50 p-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="text-sm font-bold text-slate-900">{p.currency} {parseFloat(p.amount).toLocaleString()}</p>
-                      <p className="text-xs text-slate-500">{p.payment_method} • Ref: {p.reference || 'N/A'}</p>
+                      <p className="text-sm font-bold text-slate-900">{p.currency} {parseFloat(String(p.amount)).toLocaleString()}</p>
+                      <p className="text-xs text-slate-500">{p.payment_method} â€¢ Ref: {p.reference || 'N/A'}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs font-bold text-slate-600">{new Date(p.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' })}</p>
@@ -809,7 +935,7 @@ export default function ShipmentDetails() {
                   <input type="email" readOnly aria-label="Action attributed to authenticated account" value={actionBy} className="w-full border border-slate-200 p-3 rounded-xl text-slate-600 bg-slate-100 font-medium shadow-sm" />
                 </div>
 
-                {shipment.payment_status === 'Pending' && (userRole === 'Finance' || userRole === 'Super Admin') && (
+                {shipment!.payment_status === 'Pending' && (userRole === 'Finance' || userRole === 'Super Admin') && (
                   <div className="mb-6 p-4 bg-white border border-amber-200 rounded-xl shadow-sm">
                     <p className="text-amber-700 font-bold mb-3 flex items-center gap-2"><Clock size={18}/> Awaiting Finance Approval</p>
                     <button type="button" onClick={handleApprovePayment} disabled={isSubmitting} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-emerald-700 flex items-center gap-2 transition-all shadow-md">
@@ -818,7 +944,7 @@ export default function ShipmentDetails() {
                   </div>
                 )}
 
-                {shipment.payment_status === 'Approved' && shipment.current_status === 'Registered' && (userRole === 'Freight' || userRole === 'Super Admin') && (
+                {shipment!.payment_status === 'Approved' && shipment!.current_status === 'Registered' && (userRole === 'Freight' || userRole === 'Super Admin') && (
                   <div className="mb-6 p-4 bg-white border border-blue-200 rounded-xl shadow-sm">
                     <p className="text-blue-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Awaiting Freight Booking</p>
                     <button type="button" onClick={handleFreightBooked} disabled={isSubmitting} className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-blue-700 flex items-center gap-2 transition-all shadow-md">
@@ -828,7 +954,7 @@ export default function ShipmentDetails() {
                 )}
 
                 {/* RFS SPECIFIC ACTIONS */}
-                {userRole === 'RFS' && shipment.current_status === 'Booked' && (
+                {userRole === 'RFS' && shipment!.current_status === 'Booked' && (
                   <div className="mb-6 p-4 bg-white border border-blue-200 rounded-xl shadow-sm">
                     <p className="text-blue-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Shipment Ready for Pickup</p>
                     <div className="flex flex-col gap-2">
@@ -837,7 +963,7 @@ export default function ShipmentDetails() {
                   </div>
                 )}
 
-                {userRole === 'RFS' && shipment.current_status === 'Picked Up' && (
+                {userRole === 'RFS' && shipment!.current_status === 'Picked Up' && (
                   <div className="mb-6 p-4 bg-white border border-purple-200 rounded-xl shadow-sm">
                     <p className="text-purple-700 font-bold mb-3 flex items-center gap-2"><Anchor size={18}/> Routing Decision</p>
                     <p className="text-xs text-slate-500 mb-3">Did you deliver this locally or are you handing it to Operations for export?</p>
@@ -849,11 +975,11 @@ export default function ShipmentDetails() {
                 )}
 
                 {/* OPS SPECIFIC ACTIONS */}
-                {userRole === 'Operations' && (shipment.current_status === 'Handed to Ops' || shipment.current_status === 'Export Cleared') && (
+                {userRole === 'Operations' && (shipment!.current_status === 'Handed to Ops' || shipment!.current_status === 'Export Cleared') && (
                   <div className="mb-6 p-4 bg-white border border-amber-200 rounded-xl shadow-sm">
                     <p className="text-amber-700 font-bold mb-3 flex items-center gap-2"><Plane size={18}/> Operations Processing</p>
                     <div className="flex flex-col gap-2">
-                      {shipment.current_status === 'Handed to Ops' && (
+                      {shipment!.current_status === 'Handed to Ops' && (
                         <button type="button" onClick={() => handleUpdateStatus('Export Cleared', 'Customs/Export formalities cleared')} disabled={isSubmitting} className="bg-amber-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-amber-700 w-full">Mark Export Cleared</button>
                       )}
                       <button type="button" onClick={() => handleUpdateStatus('Handed to Airline', 'Handed over to Airline')} disabled={isSubmitting} className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold hover:bg-indigo-700 w-full">Handover to Airline</button>
@@ -928,7 +1054,7 @@ export default function ShipmentDetails() {
             <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-linear-to-b before:from-transparent before:via-slate-200 before:to-transparent">
               {timeline.map((item, i) => (
                 <div key={item.id || i} className={`relative flex items-center justify-between md:justify-normal group is-active ${item.isOptimistic ? 'opacity-60' : ''}`}>
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full border-4 border-white text-white shadow shrink-0 z-10 text-xs ${item.isOptimistic ? 'bg-slate-400' : 'bg-indigo-500'}`}>{item.isOptimistic ? '...' : '✓'}</div>
+                  <div className={`flex items-center justify-center w-8 h-8 rounded-full border-4 border-white text-white shadow shrink-0 z-10 text-xs ${item.isOptimistic ? 'bg-slate-400' : 'bg-indigo-500'}`}>{item.isOptimistic ? '...' : 'âœ“'}</div>
                   <div className="w-[calc(100%-3rem)] bg-slate-50 p-4 rounded-xl border border-slate-100 shadow-sm ml-4">
                     <div className="flex items-center justify-between space-x-2 mb-1"><div className="font-bold text-slate-900 text-sm">{item.status_dropdown}</div><time className="text-[10px] font-semibold text-slate-400 uppercase">{new Date(item.created_at).toLocaleDateString('en-GB', { timeZone: 'Africa/Lagos' })}</time></div>
                     <div className="text-sm text-slate-600 leading-relaxed">{item.status_notes}</div>
@@ -970,7 +1096,7 @@ export default function ShipmentDetails() {
             </div>
             <form onSubmit={handleRecordPayment} className="p-6 space-y-4">
               <div>
-                <label htmlFor="payment-amount" className="block text-xs font-bold text-slate-500 uppercase mb-1">Amount Paid ({shipment.currency})</label>
+                <label htmlFor="payment-amount" className="block text-xs font-bold text-slate-500 uppercase mb-1">Amount Paid ({shipment!.currency})</label>
                 <input id="payment-amount" type="number" min="0.01" max={agreedAmount > 0 ? Math.max(balance, 0) : undefined} step="0.01" required value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 font-bold" placeholder={`Max: ${balance}`} />
               </div>
               <div>

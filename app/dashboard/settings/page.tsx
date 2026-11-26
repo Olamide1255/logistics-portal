@@ -1,15 +1,27 @@
 'use client';
+import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Settings, Save, Upload, ShieldAlert, Bell, Volume2 } from 'lucide-react';
 import { toast, Toaster } from 'sonner';
 
+type CompanySettingsData = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  logo_url: string | null;
+  logo_path: string | null;
+};
+
 export default function CompanySettings() {
-  const [company, setCompany] = useState<any>(null);
+  const [company, setCompany] = useState<CompanySettingsData | null>(null);
   const [profileId, setProfileId] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [uploading, setUploading] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -30,7 +42,7 @@ export default function CompanySettings() {
         .eq('id', user.id)
         .single();
       
-      if (profile?.role !== 'Super Admin' && !profile?.is_platform_admin) {
+      if (profile?.is_platform_admin === true || profile?.role !== 'Super Admin' || !profile?.company_id) {
         setIsAuthorized(false);
         setLoading(false);
         return;
@@ -76,31 +88,37 @@ export default function CompanySettings() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!company) return toast.error("No company data loaded.");
-    
-    setSaving(true);
-    
-    // 1. Update Company Info
-    const { error: compError } = await supabase.from('companies').update({
-      name: formData.name, 
-      email: formData.email, 
-      phone: formData.phone, 
-      address: formData.address
-    }).eq('id', company.id);
-    
-    // 2. Update User Preferences
-    const { error: profError } = await supabase.from('profiles').update({
-      sound_alerts: formData.sound_alerts,
-      push_notifications: formData.push_notifications
-    }).eq('id', profileId);
-    
-    if (compError || profError) {
-      toast.error("Failed to save: " + (compError?.message || profError?.message));
-    } else {
-      toast.success("Settings updated successfully!");
+    if (saving) return;
+    if (!company) {
+      setSaveError('No company data loaded. Refresh the page and try again.');
+      return;
     }
-    
-    setSaving(false);
+
+    setSaveError('');
+    setSaving(true);
+    try {
+      const { error: compError } = await supabase.from('companies').update({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        address: formData.address,
+      }).eq('id', company.id);
+      if (compError) throw compError;
+
+      const { error: profError } = await supabase.from('profiles').update({
+        sound_alerts: formData.sound_alerts,
+        push_notifications: formData.push_notifications,
+      }).eq('id', profileId);
+      if (profError) throw profError;
+
+      toast.success('Settings updated successfully!');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to save company settings. Please try again.';
+      setSaveError(message);
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -183,7 +201,14 @@ export default function CompanySettings() {
           <h2 className="text-lg font-bold text-slate-900 mb-4">Company Logo</h2>
           <div className="w-32 h-32 rounded-2xl bg-slate-50 border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden mb-4 relative group">
             {company?.logo_url ? (
-              <img src={company.logo_url} alt="Logo" className="w-full h-full object-contain p-2" />
+              <Image
+  src={company.logo_url}
+  alt={`${company.name || 'Company'} company logo`}
+  fill
+  unoptimized
+  sizes="128px"
+  className="object-contain p-2"
+/>
             ) : (
               <Upload className="text-slate-400" size={32} />
             )}
@@ -197,6 +222,7 @@ export default function CompanySettings() {
         {/* COMPANY DETAILS & PREFERENCES FORM */}
         <div className="md:col-span-2 bg-white p-6 rounded-2xl shadow-sm ring-1 ring-slate-200/60">
           <form onSubmit={handleSave} className="space-y-4">
+            {saveError && <p role="alert" aria-live="polite" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{saveError}</p>}
             <div>
               <label htmlFor="company-name" className="block text-xs font-bold text-slate-500 uppercase mb-1">Company Name</label>
               <input type="text" id="company-name" name="name" value={formData.name} onChange={handleChange} className="w-full border border-slate-200 p-2.5 rounded-xl text-sm text-slate-900 font-medium" required />

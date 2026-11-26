@@ -1,5 +1,13 @@
 import Link from 'next/link';
 import { Package, ArrowRight, ShieldCheck, Zap, Globe, CheckCircle } from 'lucide-react';
+import type { Metadata } from 'next';
+import { MobileStickyCta } from '@/components/mobile-sticky-cta';
+
+export const metadata: Metadata = {
+  title: 'Logistics operations, connected',
+  description: 'Bring shipment records, handovers, documents and finance workflows together in one secure workspace for freight forwarders and clearing teams.',
+  alternates: { canonical: '/' },
+};
 
 export default function LandingPage() {
   return (
@@ -26,11 +34,11 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-20 pb-24 px-4 text-center max-w-4xl mx-auto">
+      <section className="pt-12 pb-20 px-4 text-center max-w-4xl mx-auto sm:pt-20 sm:pb-24">
         <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-6 ring-1 ring-indigo-200">
           <Zap size={14} /> A connected workspace for logistics teams
         </div>
-        <h1 className="text-5xl md:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight mb-6">
+        <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight mb-6">
           Bring every shipment, handover and update into one workspace.
         </h1>
         <p className="text-lg md:text-xl text-slate-500 mb-10 max-w-2xl mx-auto font-medium leading-relaxed">
@@ -56,7 +64,7 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-3 gap-8">
             {[
               { icon: ShieldCheck, title: "Role-Based Security", desc: "Hide financials from RFS. Restrict deletion to Admins. Every user sees exactly what they need." },
-              { icon: Globe, title: "Real-Time Tracking", desc: "Timely updates help the right teams stay aligned as shipments move through each milestone." },
+              { icon: Globe, title: "Shipment Visibility", desc: "Timely manual status updates help the right teams stay aligned as shipments move through each milestone." },
               { icon: CheckCircle, title: "Document Management", desc: "Upload customs forms, commercial invoices, and proof of pickup directly to the AWB." }
             ].map((feature, i) => (
               <div key={i} className="p-6 rounded-2xl bg-slate-50 border border-slate-100">
@@ -72,9 +80,14 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-8 text-center text-slate-500 text-sm font-medium" suppressHydrationWarning>
-        &copy; LogiFlow. All rights reserved.
+      <footer className="px-4 py-8 pb-24 text-center text-sm font-medium text-slate-500 sm:pb-8" suppressHydrationWarning>
+        <p>&copy; 2026 LogiFlow. All rights reserved.</p>
+        <nav aria-label="Legal" className="mt-3 flex justify-center gap-5">
+          <Link href="/privacy" className="hover:text-indigo-600 hover:underline">Privacy policy</Link>
+          <Link href="/terms" className="hover:text-indigo-600 hover:underline">Terms of service</Link>
+        </nav>
       </footer>
+      <MobileStickyCta />
     </div>
   );
 }

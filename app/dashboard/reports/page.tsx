@@ -1,4 +1,5 @@
 'use client';
+import { trackProductEvent } from '@/lib/product-analytics';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -177,6 +178,7 @@ export default function OperationsReportsPage() {
       { key: 'metric', label: 'Metric' },
       { key: 'value', label: 'Value' },
     ]);
+    trackProductEvent('operations_report_exported');
     toast.success('Report export prepared.');
   };
 

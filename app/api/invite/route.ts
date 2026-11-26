@@ -34,6 +34,7 @@ export async function POST(req: Request) {
   let admin: ReturnType<typeof getAdminClient> | null = null;
   let targetCompanyId = '';
   let email = '';
+  let tracksCompanyAdminInvite = false;
 
   try {
     const authorization = req.headers.get('authorization');
@@ -94,6 +95,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Only platform administrators can appoint a company Super Admin.' }, { status: 403 });
     }
 
+    tracksCompanyAdminInvite = isPlatformAdmin && requestedRole === 'Super Admin';
+
     targetCompanyId = isPlatformAdmin ? requestedCompanyId : callerProfile.company_id!;
     if (!isPlatformAdmin && requestedCompanyId !== callerProfile.company_id) {
       return NextResponse.json({ error: 'You can only invite users into your own company.' }, { status: 403 });
@@ -126,7 +129,9 @@ export async function POST(req: Request) {
       );
     }
 
-    await updateInviteState(admin, targetCompanyId, 'pending', email);
+    if (tracksCompanyAdminInvite) {
+      await updateInviteState(admin, targetCompanyId, 'pending', email);
+    }
 
     // If the first attempt created the Auth user but failed before creating its profile,
     // reuse that pending identity instead of creating a duplicate or deleting the account.
@@ -145,7 +150,9 @@ export async function POST(req: Request) {
         if (existingProfile.company_id !== targetCompanyId || existingProfile.role !== requestedRole) {
           throw new Error('This email is already associated with another account. Contact platform support.');
         }
-        await updateInviteState(admin, targetCompanyId, 'sent', email);
+        if (tracksCompanyAdminInvite) {
+          await updateInviteState(admin, targetCompanyId, 'sent', email);
+        }
         return NextResponse.json({ success: true, alreadyOnboarded: true });
       }
 
@@ -176,11 +183,13 @@ export async function POST(req: Request) {
       throw new Error('The invitation email was initiated, but the company profile could not be completed. Retry the invitation.');
     }
 
-    await updateInviteState(admin, targetCompanyId, 'sent', email);
+    if (tracksCompanyAdminInvite) {
+      await updateInviteState(admin, targetCompanyId, 'sent', email);
+    }
     return NextResponse.json({ success: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'An unexpected error occurred while creating the invitation.';
-    if (admin && targetCompanyId && email) {
+    if (tracksCompanyAdminInvite && admin && targetCompanyId && email) {
       try { await updateInviteState(admin, targetCompanyId, 'failed', email, message); }
       catch (stateError) { console.error('Unable to persist invitation failure state:', stateError); }
     }

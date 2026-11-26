@@ -46,3 +46,11 @@ jobs:
       - name: Run authenticated staging journeys
         if: ${{ env.E2E_PLATFORM_ADMIN_PASSWORD != '' && env.E2E_TENANT_PASSWORD != '' }}
         run: npm run test:e2e -- e2e/authenticated.spec.ts
+
+      - name: Report authenticated test status
+        if: ${{ env.E2E_PLATFORM_ADMIN_PASSWORD == '' || env.E2E_TENANT_PASSWORD == '' }}
+        run: |
+          {
+            echo '### Authenticated staging journeys not run'
+            echo 'The dedicated staging Platform Admin and tenant passwords are not both configured as GitHub Actions secrets. The non-authenticated quality, API authorization, and browser smoke checks completed separately. Configure both `E2E_PLATFORM_ADMIN_PASSWORD` and `E2E_TENANT_PASSWORD` repository secrets to enable the authenticated tenant-isolation journeys.'
+          } >> "$GITHUB_STEP_SUMMARY"
